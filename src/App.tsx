@@ -786,7 +786,11 @@ export default function App() {
           className={`map-panel ${picking ? 'picking' : ''}`}
           aria-label="Interactive walking route map"
         >
-          <div ref={mapEl} className="map-canvas" />
+          <div
+            key={data?.manifest.datasetId ?? 'unloaded'}
+            ref={mapEl}
+            className="map-canvas"
+          />
           <div className="map-location">
             <Compass size={20} />
             <div>

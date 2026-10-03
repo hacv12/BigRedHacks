@@ -1,12 +1,12 @@
-# Multi-city implementation plan
+# Multi-city architecture and implementation
 
 Requested October 3, 2026: support any city with usable data and include New York City.
 
-Brisa is becoming a city-independent planner with a catalog of validated coverage packages. A package defines its real planning boundary, source, source-specific filters, local timezone, record period, default landmarks and graph. The UI discovers packages from the catalog. Adding a supported city must not require changes to React or the routing algorithm.
+Brisa is a city-independent planner with a catalog of validated coverage packages. A package defines its real planning boundary, source, source-specific filters, local timezone, record period, default landmarks and graph. The UI discovers packages from the catalog. Adding a city using the normalized CSV contract requires no changes to React or the routing algorithm; a different public API schema requires an ingestion adapter.
 
-The next release includes Chicago Loop and a larger NYC Central Manhattan package, with actual available coverage named on screen. A city name is not a promise of entire metropolitan coverage. Additional districts and cities use the same ingestion and registration process.
+The release includes Chicago Loop and NYC Central Manhattan, with actual available coverage named on screen. NYC opens by default and covers a rectangle from Battery Park through Columbus Circle. A city name is not a promise of entire metropolitan coverage. Additional districts and cities use the same ingestion and registration process, documented in [ADDING_CITIES.md](ADDING_CITIES.md).
 
-Implementation slices:
+Completed implementation slices:
 
 1. Versioned package/catalog contracts; validate catalog and loaded datasets together.
 2. Configurable source adapters for Chicago and NYPD, plus a documented normalized CSV adapter for additional jurisdictions. Source-specific field names, dates and offense/premise taxonomies stay outside the route engine. Isolate caches by configuration and verify counts before publishing.
@@ -16,3 +16,13 @@ Implementation slices:
 6. Multi-city integrity/routing tests, browser city-switch and failure tests, mobile checks, setup/onboarding instructions and incremental commits.
 
 Each package has an independently normalized historical report index. Values and percentage reductions compare routes within the same package/time context; they do not rank cities against each other. Unknown coverage remains unsupported. Claims about live risk or universally safe routes remain out of scope.
+
+## Review decisions
+
+The implementation and independent review retained regional packages instead of claiming citywide coverage from a small graph. New York's complete 90,116-row source extraction and 73,021-node walking graph fit the browser approach without shrinking the selected rectangle. The 22.2 MB uncompressed NYC package loads only when selected. Spatial indexing and a Web Worker keep graph search off the UI thread; deployment should enable HTTP compression for JSON. Further scale requires smaller regional packages or a graph service, and routing across package boundaries requires explicit graph stitching.
+
+Source review rejected treating NYPD and Chicago offenses as equivalent. NYPD has no domestic relationship flag, includes uncertain occurrence intervals and can fall back to precinct coordinates. The adapter filters unsuitable categories and intervals and publishes the remaining limitations. Parks are included in both the walking network and eligible premises. The UI displays the selected package's source, period and timezone, and explicitly limits index comparisons to that package.
+
+Lifecycle review covered switching cities during downloads and planning, failed packages, invalid catalogs, unknown deep links and recovery. City changes abort downloads, terminate the previous worker, remove the old map and reset endpoints, routes and settings. Package identity, metadata, full grid coverage and graph integrity are validated before display.
+
+Independent route checks reproduced the indexed NYC exposure calculations with the original linear cell lookup to within floating-point precision. Penn Station → Grand Central takes 22.731 minutes on the fastest path; the noon–6 pm lower-index candidate takes 23.300 minutes with 9.876% less modeled exposure. These are properties of the bundled historical model, not observed reductions in victimization. Refreshing sources can change the results.
