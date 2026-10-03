@@ -11,16 +11,23 @@ Open the printed local URL. NYC is the app default. For the LATAM demo, open `/?
 
 ## Two-minute working demo
 
-1. **0:00 — Frame the decision.** Our LATAM team's experiences inspired a walking planner that exposes historical report context alongside time. Begin in São Paulo with Edifício Copan → Praça da Sé, noon–6 pm, eight extra minutes allowed. This is the working Brazil package.
-2. **0:20 — Compare geometry.** Select Fastest walk and a distinct lower-exposure choice if available. The highlighted line is the scored OSM path. Enable reported incident intensity to show aggregate context. The current São Paulo default is about 20.30 minutes fastest versus 22.53 minutes for 14.89% lower modeled exposure (cards round values). Use the displayed values if a package or model changes.
-3. **0:40 — Enforce the budget.** Set Room for a detour to zero, then select Compare walking routes. Old results and their share/export actions disappear until the comparison runs again. Restore eight minutes and select Compare walking routes again before continuing. A distinct alternative is not promised for every request.
-4. **1:00 — Explain the chosen path.** Open Street sequence. These are contiguous named segments, not turn instructions. Same walk, different windows shows the selected geometry's four historical exposure values; choosing another route updates all four.
-5. **1:20 — Share and export.** Share trip reveals the coordinate disclosure and a link; Copy link is optional. Open that link to restore the endpoints, window, budget and semantic route preference. The browser address then retains only the coverage area. Download GPX preserves the selected path; Download summary preserves its street sequence and historical context. Shared links recalculate rather than freeze route geometry.
-6. **1:40 — Show scope and limits.** Show coverage fits the package boundary; Fit routes to map returns to the walk. Show the four-city selector without waiting for another comparison. Say: “São Paulo uses 2,466 eligible pedestrian cellphone theft/robbery reports with known times. Missing times introduce bias. These historical indices do not predict safety or rank cities.” Keep a city switch and SF’s narrow scope for questions.
+1. **0:00 — Start one real decision.** Open São Paulo and select **Try example walk** to restore Edifício Copan → Praça da Sé, noon–6 pm and an eight-minute budget. Introduce the team's LATAM motivation: comparing historical report context alongside walking time.
+2. **0:20 — Choose the tradeoff.** Select Fastest walk, then a distinct lower-exposure choice if available. Read the generated takeaway rather than doing mental arithmetic. The current example is about two extra minutes for a 15% lower historical report index (20.30 versus 22.53 minutes, 14.89% unrounded). Use actual displayed values after any model/data change. A distinct alternative is not promised for every request.
+3. **0:50 — Make the detour concrete.** Open **What changes from fastest?** Show the measured shared/different street sections and the named sections on each walk. Names describe where geometry differs, not why incidents occurred or whether a street is accessible, well lit or safe. Different sections can have the same street name.
+4. **1:20 — Make the choice portable.** Select **Share trip**, show the endpoint-coordinate disclosure and generated link. Explain that opening it recalculates the request; GPX preserves selected geometry. Keep copying, reopening and downloading for questions.
+5. **1:40 — State scope.** Show coverage and conclude: “São Paulo uses 2,466 eligible pedestrian cellphone theft/robbery reports with known times. Missing times introduce bias. This compares historical report indices, not personal safety or cities.” Leave the selected walk on screen.
+
+## Optional questions and demonstrations
+
+- **Does the budget matter?** Set the extra-time budget to zero and compare. Restore the example with Try example walk. Do not imply every budget returns three routes.
+- **Does time change the explanation?** Show Same walk, different windows: four historical scores for the exact selected geometry. These are not current predictions.
+- **Can I choose another street?** Use the bundled street search. It needs no external geocoder; results are limited to named sections in the loaded graph, not street addresses or entrances.
+- **Can I take it with me?** Open the shared link or download GPX/summary. Street sequences are planning references, not verified turn instructions.
+- **What has updated recently?** Use the separate SF segment below, with network access. It does not modify the historical routing model.
 
 For a spoken script and submission draft, use [PITCH.md](PITCH.md).
 
-Actual app captures are available for the presentation: [desktop comparison](screenshots/sao-paulo-desktop.jpg) and [mobile map](screenshots/sao-paulo-mobile.jpg). They show the committed São Paulo demo, with OpenStreetMap attribution retained; they do not establish a public deployment or current street conditions.
+Actual app captures are available for the presentation: [desktop comparison](screenshots/sao-paulo-desktop.jpg), [mobile map](screenshots/sao-paulo-mobile.jpg) and [mobile tradeoff](screenshots/sao-paulo-tradeoff-mobile.jpg). They show the committed São Paulo demo, with OpenStreetMap attribution retained on map captures; they do not establish a public deployment or current street conditions.
 
 ## Optional 30-second activity segment
 
@@ -61,7 +68,7 @@ São Paulo's MASP landmark is named **MASP · Paulista sidewalk**. Its reviewed 
 
 Routing runs in a Web Worker over a real OSM graph. The engine integrates the historical index along route geometry and searches 18 time/exposure tradeoffs, displaying at most three distinct budget-compliant candidates. This is not a guarantee of globally optimal constrained routing.
 
-Run `npm test`, `python3 scripts/test_data.py`, `npm run build`, and `npm run test:e2e`. Browser tests use actual workers and suppress public tile requests. Covered flows include city switching, load recovery, route selection, exact selected GPX coordinates, share-link roundtrips, invalid links, stale-action removal, street sequences and the four-window profile on desktop and mobile. Tests validate implementation behavior; they do not establish predictive accuracy, physical accessibility or improved personal safety.
+Run `npm test`, `python3 scripts/test_data.py`, `npm run build`, and `npm run test:e2e`. Browser tests use actual workers and suppress public tile requests. Covered flows include city switching, load recovery, route selection, exact selected GPX coordinates, share-link roundtrips, invalid links, stale-action removal, street sequences and the four-window profile on desktop and mobile. The refinement suite also covers local name search, keyboard map selection, example reset, route explanations and delayed worker completion during endpoint selection. Tests validate implementation behavior; they do not establish predictive accuracy, physical accessibility or improved personal safety.
 
 ## Honest answers for judges
 

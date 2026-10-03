@@ -4,15 +4,15 @@
 
 **0:00–0:20 — Why.** “Our LATAM team's experiences inspired a question: what if a walking planner made local context visible alongside arrival time? Brisa compares walks using historical reported incidents and lets you decide how much extra walking time to allow.”
 
-**0:20–0:50 — Show the decision.** Open `/?area=sao-paulo-centro`: Edifício Copan → Praça da Sé, noon–6 pm, eight extra minutes. Select Fastest walk, then Lower exposure if available. “These lines follow real OpenStreetMap streets. Each card shows the walking time and modeled report exposure. The extra-time budget is a constraint on every displayed choice.” Set the budget to zero and compare again.
+**0:20–0:50 — Show one decision.** Open `/?area=sao-paulo-centro` and select **Try example walk**. Select a distinct lower-exposure route if available. Read its generated takeaway: the current example offers about two extra minutes for a 15% lower historical report index. “These lines follow real OpenStreetMap streets. Every displayed choice respects the extra-time budget.” Use actual returned values, not a memorized promise.
 
-**0:50–1:15 — Make it explainable.** Restore the budget and select Compare walking routes again. Open Street sequence and show Same walk, different windows. “These four values score this exact path against four historical local-time windows. They do not silently substitute four different routes. Street names describe the path; they are not verified turn instructions.”
+**0:50–1:20 — Show what changed.** Open **What changes from fastest?** “Here are the street sections shared by the walks, and the sections that differ. We explain the actual geometry, not an invented claim about why a street is safer.” Point to one named section and the highlighted path.
 
-**1:15–1:35 — Make it portable.** Select Share trip. “Sharing is explicit: this link contains both locations. Opening it recalculates the request. GPX preserves the selected geometry, and the summary carries its historical context.” Show coverage and point out the four-city selector. Keep another city load for questions.
+**1:20–1:40 — Make it portable.** Select Share trip. “Sharing is explicit: this link contains both locations and recalculates the request. GPX preserves the selected geometry.” Keep downloading and reopening for questions.
 
-**1:35–2:00 — State the boundary and next step.** “São Paulo uses 2,466 eligible pedestrian cellphone theft/robbery reports. Missing times introduce bias. This models historical reports, not your probability of harm. We compare walks within a package, never rank cities. Next: local-user street audits and sensitivity testing.”
+**1:40–2:00 — State the boundary.** “São Paulo uses 2,466 eligible pedestrian cellphone theft/robbery reports. Missing times introduce bias. This models historical reports, not your probability of harm. We compare walks within a package, never rank cities. Next: local-user street audits and sensitivity testing.”
 
-If a distinct lower-exposure alternative is unavailable, show the explanatory message. Do not imply every request has one.
+If a distinct alternative is unavailable, show the explanation honestly. Keep zero-budget proof, the four-window profile, bundled offline street search, and SF's delayed unverified dispatch bubbles for optional questions; see [DEMO.md](DEMO.md). The core presentation stays on one Brazil walking decision.
 
 ## Devpost-ready factual draft
 

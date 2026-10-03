@@ -55,8 +55,10 @@ Available public data still needs a usable occurrence time, location, incident d
 ## What the planner does
 
 - Selects a city/coverage package, landmarks or map endpoints, a local historical time window, and an extra-time budget.
+- Searches bundled street/landmark names, supports keyboard map-center selection, and restores a ready-to-compare trip with **Try example walk**.
 - Computes routes along real OpenStreetMap walking geometry and integrates the report index along each displayed path.
 - Shows distinct fastest/lower-index candidates that satisfy the exact budget, with time and distance alongside exposure comparisons.
+- Summarizes the selected route's tradeoff and explains which actual street sections differ from the fastest route.
 - Displays aggregate report context, package-specific dates, timezone, eligibility, sources and route explanations.
 - Offers an optional latest-activity bubble layer: unverified SF dispatch calls and delayed published NYC/Chicago reports, with source windows and freshness visible. It does not change historical route scores; São Paulo has no verified recent feed.
 - Shows contiguous street segments and four historical-window scores for the exact selected path.
@@ -85,6 +87,7 @@ flowchart LR
 | --- | --- | --- |
 | Multi-city design | [docs/MULTICITY.md](docs/MULTICITY.md) | Coverage model, source boundaries and expansion decisions |
 | Original council | [docs/PLAN.md](docs/PLAN.md) | Product tradeoffs and initial model |
+| Refinement council | [docs/COUNCIL_REFINEMENT.md](docs/COUNCIL_REFINEMENT.md) | Judge, user and engineering reviews; resulting changes and boundaries |
 | Demo walkthrough | [docs/DEMO.md](docs/DEMO.md) | Two-minute demo and local fallback |
 | Pitch kit | [docs/PITCH.md](docs/PITCH.md) | Spoken pitch and factual submission draft |
 | Manual deployment | [docs/DEPLOY.md](docs/DEPLOY.md) | Publication instructions; not a claim of a live deployment |

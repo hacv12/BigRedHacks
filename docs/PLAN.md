@@ -1,5 +1,7 @@
 # Brisa: agreed hackathon plan
 
+**Historical plan:** this document records the original Chicago MVP decision. The current implementation supports four bounded city packages, including São Paulo, with route tradeoff explanations, sharing/exports, bundled street search and a separate optional latest-activity layer. See [README](../README.md), [DEMO.md](DEMO.md) and [LIVE_ACTIVITY.md](LIVE_ACTIVITY.md) for current scope; original single-city scope and roadmap statements below are preserved as decision history.
+
 Status: council decision accepted October 2, 2026; MVP implemented and validated October 3, 2026.
 
 Implementation refinement, October 3: the incident place filter includes public parks, waterfronts, bridges and bus stops as well as streets/sidewalks. The street graph includes these outdoor pedestrian spaces, so excluding their reports would create an artificial advantage. The final snapshot contains 3,064 eligible reports from 21,349 verified source records. See DATA.md for the exact allowlist and reproducible query.
