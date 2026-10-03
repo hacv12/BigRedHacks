@@ -32,6 +32,12 @@ export interface Landmark {
   point: LngLat;
 }
 export interface DataManifest {
+  schemaVersion: 1;
+  datasetId: string;
+  cityId: string;
+  sourceName: string;
+  sourceAdapter: string;
+  coverageDescription: string;
   city: string;
   district: string;
   timezone: string;
@@ -53,6 +59,27 @@ export interface DataManifest {
   modelVersion: string;
   normalization: number;
   notes: string[];
+}
+export interface CoverageArea {
+  id: string;
+  cityId: string;
+  city: string;
+  region: string;
+  regionCode: string;
+  countryCode: string;
+  timezone: string;
+  bounds: Bounds;
+  datasetUrl: string;
+  defaultOriginId: string;
+  defaultDestinationId: string;
+  description: string;
+  periodStart: string;
+  periodEnd: string;
+}
+export interface CityCatalog {
+  version: 1;
+  defaultAreaId: string;
+  areas: CoverageArea[];
 }
 export interface CityDataset {
   manifest: DataManifest;
