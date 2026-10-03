@@ -40,6 +40,7 @@ interface Arc {
   meters: number;
   minutes: number;
   exposure: number;
+  exposureByBucket: FourValues;
 }
 type Graph = Map<string, Arc[]>;
 // Spatial bins retain original cell order, including inclusive shared boundaries.
@@ -166,7 +167,7 @@ function graphFor(data: CityDataset, bucket: number): Graph {
   for (const { edge, meters, exposures } of prepared.edges) {
     const exposure = exposures[bucket];
     // Unknown scoring removes the edge; it never becomes a zero-cost corridor.
-    if (!Number.isFinite(exposure)) continue;
+    if (!exposures.every(Number.isFinite)) continue;
     const arc = {
       edge,
       to: edge.to,
@@ -174,6 +175,7 @@ function graphFor(data: CityDataset, bucket: number): Graph {
       meters,
       minutes: meters / 81,
       exposure,
+      exposureByBucket: exposures,
     };
     graph.get(edge.from)!.push(arc);
     if (edge.bidirectional)
@@ -262,6 +264,7 @@ function route(path: Arc[], origin: string): PlannedRoute {
     meters: 0,
     minutes: 0,
     exposure: 0,
+    exposureByBucket: [0, 0, 0, 0],
     extraMinutes: 0,
     reductionPercent: null,
     segments: [],
@@ -278,6 +281,8 @@ function route(path: Arc[], origin: string): PlannedRoute {
     result.meters += arc.meters;
     result.minutes += arc.minutes;
     result.exposure += arc.exposure;
+    for (let bucket = 0; bucket < 4; bucket++)
+      result.exposureByBucket[bucket] += arc.exposureByBucket[bucket];
     const name = arc.edge.name || 'Unnamed walking connection',
       last = result.segments.at(-1);
     if (last?.name === name) {

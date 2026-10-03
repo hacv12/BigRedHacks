@@ -103,6 +103,8 @@ export interface PlannedRoute {
   meters: number;
   minutes: number;
   exposure: number;
+  /** Historical index-minutes for this exact geometry in each local time bucket. */
+  exposureByBucket: FourValues;
   extraMinutes: number;
   reductionPercent: number | null;
   segments: RouteSegment[];
