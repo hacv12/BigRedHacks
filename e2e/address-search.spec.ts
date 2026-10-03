@@ -61,7 +61,7 @@ test('arbitrary bounded address requires explicit selection and preserves reques
     page.getByRole('option', { name: /123 Test Avenue/ }),
   ).toBeVisible();
   await page.screenshot({
-    path: `/private/tmp/brisa-address-${test.info().project.name}.png`,
+    path: test.info().outputPath('address-search.png'),
     fullPage: false,
   });
   await input.press('Enter');
