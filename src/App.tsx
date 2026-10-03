@@ -21,6 +21,10 @@ import { createRoutePlanner } from './domain/planner-client';
 import { loadCatalog, loadDataset } from './data/loaders';
 import WalkDetails from './components/WalkDetails';
 import RecentReports from './components/RecentReports';
+import RouteDecision from './components/RouteDecision';
+import MapPickerControls, {
+  type LocalPlace,
+} from './components/MapPickerControls';
 import { useRecentActivity } from './data/use-recent-activity';
 import { aggregateRecentBubbles, bubbleRadius } from './domain/recent-bubbles';
 import {
@@ -120,6 +124,13 @@ export default function App() {
   const [picking, setPicking] = useState<'origin' | 'destination' | null>(null);
   const [fit, setFit] = useState(0);
   const mapEl = useRef<HTMLDivElement>(null);
+  const mapPanel = useRef<HTMLElement>(null);
+  const plannerForm = useRef<HTMLFormElement>(null);
+  const [customNames, setCustomNames] = useState<{
+    origin?: string;
+    destination?: string;
+  }>({});
+  const mapReference = useRef<LocalPlace | null>(null);
   const map = useRef<L.Map | null>(null);
   const comparisonRef = useRef<RouteComparison | null>(null);
   comparisonRef.current = result;
@@ -138,6 +149,61 @@ export default function App() {
       },
     );
   }
+  function revealMap() {
+    const panel = mapPanel.current;
+    if (!panel) return;
+    if (window.matchMedia('(max-width: 900px)').matches) {
+      const header =
+        document.querySelector('.topbar')?.getBoundingClientRect().height ?? 0;
+      window.scrollTo({
+        top: panel.getBoundingClientRect().top + window.scrollY - header,
+        behavior: 'instant',
+      });
+    } else panel.scrollIntoView({ behavior: 'instant', block: 'nearest' });
+  }
+  function returnToForm(target: 'origin' | 'destination') {
+    requestAnimationFrame(() => {
+      plannerForm.current?.scrollIntoView({
+        behavior: 'instant',
+        block: 'start',
+      });
+      document.getElementById(target)?.focus({ preventScroll: true });
+    });
+  }
+  function confirmMapPoint(target: 'origin' | 'destination', point: LngLat) {
+    if (!data) return;
+    const [west, south, east, north] = data.manifest.planningBounds;
+    if (
+      point[0] < west ||
+      point[0] > east ||
+      point[1] < south ||
+      point[1] > north
+    ) {
+      setError(
+        `Choose a point inside ${data.manifest.district}, ${data.manifest.city} coverage.`,
+      );
+      return;
+    }
+    const reference = mapReference.current;
+    const nearReference =
+      reference &&
+      L.latLng(latlng(point)).distanceTo(latlng(reference.point)) < 1;
+    setCustom((value) => ({ ...value, [target]: point }));
+    setCustomNames((value) => ({
+      ...value,
+      [target]: nearReference ? `Near ${reference.name}` : undefined,
+    }));
+    (target === 'origin' ? setOrigin : setDestination)('custom');
+    setPicking(null);
+    mapReference.current = null;
+    invalidatePlan();
+    setNotice(
+      `${target === 'origin' ? 'Start' : 'Destination'} selected on the map. Compare routes to update your walk.`,
+    );
+    returnToForm(target);
+  }
+  const confirmPointRef = useRef(confirmMapPoint);
+  confirmPointRef.current = confirmMapPoint;
   function showCoverage() {
     if (!map.current || !data) return;
     const [west, south, east, north] = data.manifest.planningBounds;
@@ -152,11 +218,11 @@ export default function App() {
         animate: false,
       },
     );
-    mapEl.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    revealMap();
   }
   function showRouteMap() {
     setFit((value) => value + 1);
-    mapEl.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    revealMap();
   }
   const pickRef = useRef(picking);
   pickRef.current = picking;
@@ -291,6 +357,8 @@ export default function App() {
     setOrigin('');
     setDestination('');
     setCustom({});
+    setCustomNames({});
+    mapReference.current = null;
     setError('');
     setLoadError('');
     setPlannedPoints(null);
@@ -434,11 +502,7 @@ export default function App() {
         );
         return;
       }
-      setCustom((v) => ({ ...v, [target]: point }));
-      (target === 'origin' ? setOrigin : setDestination)('custom');
-      setPicking(null);
-      invalidatePlan();
-      setError('');
+      confirmPointRef.current(target, point);
     });
     let previousWidth = 0,
       previousHeight = 0;
@@ -448,7 +512,7 @@ export default function App() {
       previousWidth = width;
       previousHeight = height;
       m.invalidateSize({ animate: false });
-      fitComparison(m, comparisonRef.current);
+      if (!pickRef.current) fitComparison(m, comparisonRef.current);
     });
     resize.observe(mapEl.current);
     return () => {
@@ -638,15 +702,17 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    if (map.current) fitComparison(map.current, result);
+    if (map.current && !pickRef.current) fitComparison(map.current, result);
   }, [fit, result]);
   useEffect(() => {
     if (details) dialogRef.current?.showModal();
     else dialogRef.current?.close();
   }, [details]);
   useEffect(() => {
-    if (picking)
-      mapEl.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (picking) {
+      revealMap();
+      mapEl.current?.focus({ preventScroll: true });
+    }
   }, [picking]);
   const route = !dirty
     ? result?.routes.find((r) => r.id === selected)
@@ -712,6 +778,7 @@ export default function App() {
                   id="coverage-area"
                   value={areaId}
                   onChange={(event) => {
+                    if (event.target.value === areaId) return;
                     incomingTrip.current = null;
                     resetCity();
                     setNotice('');
@@ -726,21 +793,25 @@ export default function App() {
                 </select>
                 <ChevronDown size={16} />
               </div>
-              <p className="coverage-description">{area?.description}</p>
               {data && (
                 <>
-                  <p className="coverage-source">
-                    Source: {data.manifest.sourceName}
-                  </p>
                   <div className="coverage-meta">
-                    <span>
-                      {data.manifest.eligibleReportCount.toLocaleString()}{' '}
-                      eligible reports · {period}
-                    </span>
+                    <span>Bounded walking area · {period}</span>
                     <button className="quiet-button" onClick={showCoverage}>
                       <Scan size={14} /> Show coverage
                     </button>
                   </div>
+                  <details className="coverage-details">
+                    <summary>Coverage and source details</summary>
+                    <p className="coverage-description">{area?.description}</p>
+                    <p className="coverage-source">
+                      Source: {data.manifest.sourceName}
+                    </p>
+                    <p>
+                      {data.manifest.eligibleReportCount.toLocaleString()}{' '}
+                      eligible historical reports · {period}
+                    </p>
+                  </details>
                 </>
               )}
               {notice && (
@@ -770,31 +841,8 @@ export default function App() {
             </div>
           ) : (
             <>
-              {area && (
-                <div ref={recentPanel}>
-                  <RecentReports
-                    area={area}
-                    {...recent}
-                    bubbles={activityBubbles}
-                    selectedId={selectedActivity}
-                    category={activityCategory}
-                    onCategoryChange={setActivityCategory}
-                    onSelect={(id) => {
-                      setSelectedActivity(id);
-                      const bubble = activityBubbles.find(
-                        (item) => item.id === id,
-                      );
-                      if (
-                        bubble &&
-                        map.current &&
-                        !map.current.getBounds().contains(latlng(bubble.center))
-                      )
-                        map.current.panTo(latlng(bubble.center));
-                    }}
-                  />
-                </div>
-              )}
               <form
+                ref={plannerForm}
                 onSubmit={(e) => {
                   e.preventDefault();
                   const a = resolve('origin'),
@@ -822,7 +870,10 @@ export default function App() {
                             }}
                           >
                             {custom[key] && (
-                              <option value="custom">Custom location</option>
+                              <option value="custom">
+                                {customNames[key] ??
+                                  `${key === 'origin' ? 'Map start' : 'Map destination'} · ${custom[key]![1].toFixed(4)}, ${custom[key]![0].toFixed(4)}`}
+                              </option>
                             )}
                             {data.landmarks.map((l) => (
                               <option key={l.id} value={l.id}>
@@ -840,6 +891,7 @@ export default function App() {
                         title={`Choose ${key} on map`}
                         onClick={() => {
                           setError('');
+                          mapReference.current = null;
                           setPicking(picking === key ? null : key);
                           if (picking !== key) showCoverage();
                         }}
@@ -859,10 +911,44 @@ export default function App() {
                         origin: custom.destination,
                         destination: custom.origin,
                       });
+                      setCustomNames({
+                        origin: customNames.destination,
+                        destination: customNames.origin,
+                      });
                       invalidatePlan();
                     }}
                   >
                     <ArrowDownUp size={14} />
+                  </button>
+                </div>
+                <div className="planner-actions">
+                  <span>Pick landmarks or use the map pins.</span>
+                  <button
+                    type="button"
+                    className="quiet-button"
+                    onClick={() => {
+                      if (!area) return;
+                      const start = data.landmarks.find(
+                        (item) => item.id === area.defaultOriginId,
+                      );
+                      const end = data.landmarks.find(
+                        (item) => item.id === area.defaultDestinationId,
+                      );
+                      if (!start || !end) return;
+                      incomingTrip.current = null;
+                      setOrigin(start.id);
+                      setDestination(end.id);
+                      setCustom({});
+                      setCustomNames({});
+                      setPicking(null);
+                      mapReference.current = null;
+                      setBucket(2);
+                      setBudget(8);
+                      setNotice('Example walk restored.');
+                      void compute(data, start.point, end.point, 2, 8);
+                    }}
+                  >
+                    Try example walk
                   </button>
                 </div>
                 <label className="field-label" htmlFor="time-window">
@@ -948,6 +1034,14 @@ export default function App() {
                         : `${result?.routes.length ?? 0} routes compared`}
                   </span>
                 </div>
+                {route && result && (
+                  <RouteDecision
+                    route={route}
+                    comparison={result}
+                    data={data}
+                    period={period}
+                  />
+                )}
                 {!dirty &&
                   result?.routes.map((r, i) => (
                     <button
@@ -1038,6 +1132,30 @@ export default function App() {
                   />
                 )}
               </section>
+              {area && (
+                <div ref={recentPanel}>
+                  <RecentReports
+                    area={area}
+                    {...recent}
+                    bubbles={activityBubbles}
+                    selectedId={selectedActivity}
+                    category={activityCategory}
+                    onCategoryChange={setActivityCategory}
+                    onSelect={(id) => {
+                      setSelectedActivity(id);
+                      const bubble = activityBubbles.find(
+                        (item) => item.id === id,
+                      );
+                      if (
+                        bubble &&
+                        map.current &&
+                        !map.current.getBounds().contains(latlng(bubble.center))
+                      )
+                        map.current.panTo(latlng(bubble.center));
+                    }}
+                  />
+                </div>
+              )}
             </>
           )}
           <div className="planner-footer">
@@ -1048,155 +1166,193 @@ export default function App() {
             </button>
           </div>
         </aside>
-        <section
-          className={`map-panel ${picking ? 'picking' : ''}`}
-          aria-label="Interactive walking route map"
-        >
-          <div
-            key={data?.manifest.datasetId ?? 'unloaded'}
-            ref={mapEl}
-            className="map-canvas"
-          />
-          <div className="map-location">
-            <Compass size={20} />
-            <div>
-              <strong>
-                {area ? `${area.region}, ${area.city}` : 'Supported coverage'}
-              </strong>
-              <span>
-                {data
-                  ? `${windows[bucket]} · ${period} reports`
-                  : 'Choose a supported area to plan a walk'}
-              </span>
+        <div className="map-workspace">
+          <section
+            ref={mapPanel}
+            className={`map-panel ${picking ? 'picking' : ''}`}
+            aria-label="Interactive walking route map"
+          >
+            <div
+              key={data?.manifest.datasetId ?? 'unloaded'}
+              ref={mapEl}
+              className="map-canvas"
+              tabIndex={0}
+              role="region"
+              aria-label={
+                picking
+                  ? `Map for choosing ${picking}. Use arrow keys to pan, then confirm with Use map center.`
+                  : 'Walking map'
+              }
+            />
+            <div className="map-location">
+              <Compass size={20} />
+              <div>
+                <strong>
+                  {area ? `${area.region}, ${area.city}` : 'Supported coverage'}
+                </strong>
+                <span>
+                  {data
+                    ? `${windows[bucket]} · ${period} reports`
+                    : 'Choose a supported area to plan a walk'}
+                </span>
+              </div>
+              <span className="map-location-tag">{area?.regionCode}</span>
             </div>
-            <span className="map-location-tag">{area?.regionCode}</span>
-          </div>
-          {data && (
-            <div className="map-tools">
-              <button
-                className={overlay ? 'active' : ''}
-                onClick={() => setOverlay((v) => !v)}
-                aria-pressed={overlay}
-                aria-label="Toggle reported incident intensity"
-              >
-                <Layers size={19} />
-              </button>
-              <button
-                onClick={() => setFit((v) => v + 1)}
-                aria-label="Fit routes to map"
-                title="Fit routes to map"
-                disabled={!route}
-              >
-                <LocateFixed size={19} />
-              </button>
-              <button
-                onClick={showCoverage}
-                aria-label="Show coverage boundary"
-                title="Show coverage boundary"
-              >
-                <Scan size={19} />
-              </button>
-            </div>
-          )}
-          {picking && (
-            <div className="pick-banner" role={error ? 'alert' : 'status'}>
-              {error ||
-                `Zoom in and choose a street for your ${picking}, inside the dotted boundary.`}
-              <button
-                aria-label="Cancel map selection"
-                onClick={() => setPicking(null)}
-              >
-                <X size={16} />
-              </button>
-            </div>
-          )}
-          {data && (
-            <div className="map-bottom">
-              <div className="map-legend">
-                <div className="legend-title">
-                  <span className="legend-route" />
-                  Selected walk
-                  <span className="legend-route dashed" />
-                  Alternative
-                </div>
+            {data && (
+              <div className="map-tools">
                 <button
-                  className="intensity-toggle"
+                  className={overlay ? 'active' : ''}
                   onClick={() => setOverlay((v) => !v)}
                   aria-pressed={overlay}
+                  aria-label="Toggle reported incident intensity"
                 >
-                  <span>Reported incident intensity</span>
-                  <span className={`toggle ${overlay ? 'on' : ''}`} />
+                  <Layers size={19} />
                 </button>
-                {overlay && (
-                  <>
-                    <div className="intensity-scale">
-                      <span>Lower</span>
-                      <i />
-                      <span>Higher</span>
-                    </div>
-                    <p className="legend-caveat">
-                      No reports does not mean no risk.
-                    </p>
-                  </>
-                )}
                 <button
-                  className="intensity-toggle activity-layer-toggle"
-                  aria-pressed={recent.enabled}
-                  onClick={recent.onToggle}
+                  onClick={() => setFit((v) => v + 1)}
+                  aria-label="Fit routes to map"
+                  title="Fit routes to map"
+                  disabled={!route || !!picking}
                 >
-                  <span>
-                    <i className="activity-key" /> Latest activity bubbles
-                  </span>
-                  <span className={`toggle ${recent.enabled ? 'on' : ''}`} />
+                  <LocateFixed size={19} />
                 </button>
-                {recent.enabled && (
-                  <p className="legend-caveat activity-legend-note">
-                    {recent.loading
-                      ? 'Checking source…'
-                      : recent.error
-                        ? 'Update unavailable · see details'
-                        : recent.source?.kind === 'calls'
-                          ? 'Unverified calls · 48-hour window'
-                          : recent.feed
-                            ? `${recent.feed.windowStart.slice(0, 10)} – ${recent.feed.windowEnd.slice(0, 10)}`
-                            : 'See source availability'}
-                    <button
-                      onClick={() =>
-                        recentPanel.current?.scrollIntoView({
-                          behavior: 'smooth',
-                          block: 'start',
-                        })
-                      }
-                    >
-                      Details & dates
-                    </button>
-                  </p>
-                )}
+                <button
+                  onClick={showCoverage}
+                  aria-label="Show coverage boundary"
+                  title="Show coverage boundary"
+                >
+                  <Scan size={19} />
+                </button>
               </div>
-            </div>
+            )}
+            {picking && (
+              <div className="map-center-marker" aria-hidden="true">
+                <span>+</span>
+              </div>
+            )}
+            {data && (
+              <div className="map-bottom">
+                <div className="map-legend">
+                  <div className="legend-title">
+                    <span className="legend-route" />
+                    Selected walk
+                    <span className="legend-route dashed" />
+                    Alternative
+                  </div>
+                  <button
+                    className="intensity-toggle"
+                    onClick={() => setOverlay((v) => !v)}
+                    aria-pressed={overlay}
+                  >
+                    <span>Reported incident intensity</span>
+                    <span className={`toggle ${overlay ? 'on' : ''}`} />
+                  </button>
+                  {overlay && (
+                    <>
+                      <div className="intensity-scale">
+                        <span>Lower</span>
+                        <i />
+                        <span>Higher</span>
+                      </div>
+                      <p className="legend-caveat">
+                        No reports does not mean no risk.
+                      </p>
+                    </>
+                  )}
+                  <button
+                    className="intensity-toggle activity-layer-toggle"
+                    aria-pressed={recent.enabled}
+                    onClick={recent.onToggle}
+                  >
+                    <span>
+                      <i className="activity-key" /> Latest activity bubbles
+                    </span>
+                    <span className={`toggle ${recent.enabled ? 'on' : ''}`} />
+                  </button>
+                  {recent.enabled && (
+                    <p className="legend-caveat activity-legend-note">
+                      {recent.loading
+                        ? 'Checking source…'
+                        : recent.error
+                          ? 'Update unavailable · see details'
+                          : recent.source?.kind === 'calls'
+                            ? 'Unverified calls · 48-hour window'
+                            : recent.feed
+                              ? `${recent.feed.windowStart.slice(0, 10)} – ${recent.feed.windowEnd.slice(0, 10)}`
+                              : 'See source availability'}
+                      <button
+                        onClick={() =>
+                          recentPanel.current?.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'start',
+                          })
+                        }
+                      >
+                        Details & dates
+                      </button>
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+            {tileError && (
+              <div className="tile-status" role="status">
+                Base tiles unavailable · bundled streets shown
+              </div>
+            )}
+            {route && (
+              <button
+                className="route-map-label"
+                onClick={() =>
+                  document
+                    .querySelector('.results')
+                    ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }
+                aria-label="View selected walk details"
+              >
+                <Footprints size={16} />
+                <span className="route-label-action">View tradeoff</span>
+                <strong className="route-label-metric">
+                  {Math.ceil(route.minutes)} min
+                </strong>
+                <span className="route-label-metric">
+                  · {distance(route.meters)}
+                </span>
+                <ArrowRight size={14} />
+              </button>
+            )}
+          </section>
+          {picking && data && (
+            <MapPickerControls
+              key={`${areaId}:${picking}`}
+              data={data}
+              target={picking}
+              error={error}
+              onCancel={() => {
+                const target = picking;
+                setPicking(null);
+                setError('');
+                mapReference.current = null;
+                returnToForm(target);
+              }}
+              onUseCenter={() => {
+                const center = map.current?.getCenter();
+                if (center) confirmMapPoint(picking, [center.lng, center.lat]);
+              }}
+              onFocusMap={() => {
+                revealMap();
+                mapEl.current?.focus({ preventScroll: true });
+              }}
+              onLocate={(place) => {
+                mapReference.current = place;
+                map.current?.setView(latlng(place.point), 17, {
+                  animate: false,
+                });
+                revealMap();
+              }}
+            />
           )}
-          {tileError && (
-            <div className="tile-status" role="status">
-              Base tiles unavailable · bundled streets shown
-            </div>
-          )}
-          {route && (
-            <button
-              className="route-map-label"
-              onClick={() =>
-                document
-                  .querySelector('.results')
-                  ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-              }
-              aria-label="View selected walk details"
-            >
-              <Footprints size={16} />
-              <strong>{Math.ceil(route.minutes)} min</strong>
-              <span>· {distance(route.meters)}</span>
-              <ArrowRight size={14} />
-            </button>
-          )}
-        </section>
+        </div>
       </main>
       <dialog
         ref={dialogRef}

@@ -228,7 +228,7 @@ test('map picking explains unsupported points beside the map and accepts a point
   const canvas = page.locator('.map-canvas');
   const bounds = await canvas.boundingBox();
   await canvas.click({ position: { x: 5, y: bounds!.height / 2 } });
-  await expect(page.locator('.pick-banner')).toHaveAttribute('role', 'alert');
+  await expect(page.locator('.pick-banner').getByRole('alert')).toBeVisible();
   await expect(page.locator('.pick-banner')).toContainText('inside');
   await expect(page.locator('#origin')).toHaveValue(area.defaultOriginId);
   await canvas.click({

@@ -87,6 +87,32 @@ test('defaults to NYC with real worker routes and accessible coverage controls',
   expect(errors).toEqual([]);
 });
 
+test('reselecting the current city preserves an in-flight load and completed routes', async ({
+  page,
+}) => {
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let requests = 0;
+  await page.route('**/data/nyc-manhattan.json', async (route) => {
+    requests++;
+    await held;
+    await route.fulfill({ contentType: 'application/json', body: nycBody });
+  });
+  await page.goto('/?area=nyc-manhattan');
+  await expect(citySelect(page)).toHaveValue(nyc.id);
+  await expect.poll(() => requests).toBe(1);
+  await citySelect(page).selectOption(nyc.id);
+  release();
+  await routesReady(page);
+  const routes = await page.locator('.route-card').allTextContents();
+  await citySelect(page).selectOption(nyc.id);
+  await routesReady(page);
+  expect(await page.locator('.route-card').allTextContents()).toEqual(routes);
+  expect(requests).toBe(1);
+});
+
 test('switches both ways and resets custom endpoints and route settings', async ({
   page,
 }) => {
