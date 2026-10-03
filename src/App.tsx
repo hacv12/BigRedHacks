@@ -613,6 +613,9 @@ export default function App() {
         'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
       {
         maxZoom: 19,
+        // OSM requires a Referer. Send only the site origin, never trip URLs,
+        // while retaining the document's no-referrer policy for other requests.
+        referrerPolicy: 'strict-origin',
         attribution:
           '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       },
