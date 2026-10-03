@@ -12,7 +12,6 @@ import {
   Info,
   Layers,
   LocateFixed,
-  MapPin,
   Navigation,
   Scan,
   X,
@@ -22,6 +21,11 @@ import { loadCatalog, loadDataset } from './data/loaders';
 import WalkDetails from './components/WalkDetails';
 import RecentReports from './components/RecentReports';
 import RouteDecision from './components/RouteDecision';
+import EndpointSearch, {
+  type EndpointSuggestion,
+} from './components/EndpointSearch';
+import { usePlaceSearch } from './data/use-place-search';
+import { GEOCODER_ATTRIBUTION } from './data/geocoding';
 import MapPickerControls, {
   type LocalPlace,
 } from './components/MapPickerControls';
@@ -62,7 +66,7 @@ export default function App() {
   const recent = useRecentActivity(area);
   const [activityCategory, setActivityCategory] = useState('all');
   const [selectedActivity, setSelectedActivity] = useState<string | null>(null);
-  const recentPanel = useRef<HTMLDivElement>(null);
+  const recentPanel = useRef<HTMLDetailsElement>(null);
   const activityBubbles = useMemo(
     () =>
       data && recent.feed
@@ -111,6 +115,22 @@ export default function App() {
     origin?: LngLat;
     destination?: LngLat;
   }>({});
+  const [queries, setQueries] = useState<
+    Partial<Record<'origin' | 'destination', string>>
+  >({});
+  const [searchTarget, setSearchTarget] = useState<
+    'origin' | 'destination' | null
+  >(null);
+  const [locating, setLocating] = useState<'origin' | 'destination' | null>(
+    null,
+  );
+  const locationRequest = useRef(0);
+  const placeSearch = usePlaceSearch(
+    data,
+    area,
+    searchTarget ? (queries[searchTarget] ?? '') : '',
+    !!searchTarget,
+  );
   const [bucket, setBucket] = useState<BucketIndex>(2);
   const [budget, setBudget] = useState(8);
   const [result, setResult] = useState<RouteComparison | null>(null);
@@ -123,6 +143,7 @@ export default function App() {
   const [tileError, setTileError] = useState(false);
   const [picking, setPicking] = useState<'origin' | 'destination' | null>(null);
   const [fit, setFit] = useState(0);
+  const [mapZoom, setMapZoom] = useState(15);
   const mapEl = useRef<HTMLDivElement>(null);
   const mapPanel = useRef<HTMLElement>(null);
   const plannerForm = useRef<HTMLFormElement>(null);
@@ -194,6 +215,10 @@ export default function App() {
       [target]: nearReference ? `Near ${reference.name}` : undefined,
     }));
     (target === 'origin' ? setOrigin : setDestination)('custom');
+    setQueries((value) => ({ ...value, [target]: undefined }));
+    setSearchTarget(null);
+    locationRequest.current += 1;
+    setLocating(null);
     setPicking(null);
     mapReference.current = null;
     invalidatePlan();
@@ -201,6 +226,97 @@ export default function App() {
       `${target === 'origin' ? 'Start' : 'Destination'} selected on the map. Compare routes to update your walk.`,
     );
     returnToForm(target);
+  }
+  function endpointLabel(target: 'origin' | 'destination') {
+    const id = target === 'origin' ? origin : destination;
+    if (id === 'custom' && custom[target])
+      return (
+        customNames[target] ??
+        `${custom[target]![1].toFixed(4)}, ${custom[target]![0].toFixed(4)}`
+      );
+    return data?.landmarks.find((item) => item.id === id)?.name ?? '';
+  }
+  function chooseEndpoint(
+    target: 'origin' | 'destination',
+    place: EndpointSuggestion,
+  ) {
+    if (!data) return;
+    const [west, south, east, north] = data.manifest.planningBounds;
+    if (
+      place.point[0] < west ||
+      place.point[0] > east ||
+      place.point[1] < south ||
+      place.point[1] > north
+    ) {
+      setError(
+        `This place is outside ${data.manifest.district} walking coverage. Choose a place inside the boundary.`,
+      );
+      return;
+    }
+    locationRequest.current += 1;
+    setLocating(null);
+    const landmark =
+      place.source === 'local' && place.kind === 'landmark'
+        ? data.landmarks.find((item) => `landmark:${item.id}` === place.id)
+        : undefined;
+    (target === 'origin' ? setOrigin : setDestination)(
+      landmark?.id ?? 'custom',
+    );
+    setCustom((value) => ({ ...value, [target]: place.point }));
+    setCustomNames((value) => ({
+      ...value,
+      [target]: place.kind === 'street' ? `Near ${place.label}` : place.label,
+    }));
+    setQueries((value) => ({ ...value, [target]: undefined }));
+    setSearchTarget(null);
+    setPicking(null);
+    mapReference.current = null;
+    setNotice('');
+    invalidatePlan();
+  }
+  function locateEndpoint(target: 'origin' | 'destination') {
+    if (!navigator.geolocation) {
+      setError(
+        'Location is unavailable in this browser. Search for a place or use the map.',
+      );
+      return;
+    }
+    const token = ++locationRequest.current;
+    setLocating(target);
+    setError('');
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        if (token !== locationRequest.current) return;
+        setLocating(null);
+        chooseEndpoint(target, {
+          id: 'device-location',
+          label: 'Your location',
+          point: [position.coords.longitude, position.coords.latitude],
+          kind: 'place',
+          source: 'local',
+        });
+      },
+      (failure) => {
+        if (token !== locationRequest.current) return;
+        setLocating(null);
+        setError(
+          failure.code === 1
+            ? 'Location permission was declined. Search for a place or choose a point on the map.'
+            : 'Could not get your location. Search for a place or choose a point on the map.',
+        );
+      },
+      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 60_000 },
+    );
+  }
+  function showActivityDetails() {
+    if (!recentPanel.current) return;
+    recentPanel.current.open = true;
+    requestAnimationFrame(() =>
+      recentPanel.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      }),
+    );
   }
   const confirmPointRef = useRef(confirmMapPoint);
   confirmPointRef.current = confirmMapPoint;
@@ -358,6 +474,10 @@ export default function App() {
     setDestination('');
     setCustom({});
     setCustomNames({});
+    setQueries({});
+    setSearchTarget(null);
+    locationRequest.current += 1;
+    setLocating(null);
     mapReference.current = null;
     setError('');
     setLoadError('');
@@ -461,6 +581,7 @@ export default function App() {
       maxZoom: 19,
     });
     map.current = m;
+    m.on('zoomend', () => setMapZoom(m.getZoom()));
     m.createPane('recent-counts').style.zIndex = '450';
     m.getPane('recent-counts')!.style.pointerEvents = 'none';
     m.fitBounds([
@@ -572,6 +693,7 @@ export default function App() {
           weight: active ? 5 : 3,
           opacity: active ? 1 : 0.75,
           dashArray: active ? undefined : '7 7',
+          interactive: !picking,
         })
           .on('click', () => setSelected(r.id))
           .addTo(group);
@@ -583,6 +705,8 @@ export default function App() {
         ] as [string, LngLat][]
       ).forEach(([label, p]) =>
         L.marker(latlng(p), {
+          interactive: !picking,
+          keyboard: !picking,
           icon: L.divIcon({
             className: 'endpoint-marker',
             html: `<span>${label}</span>`,
@@ -611,6 +735,7 @@ export default function App() {
               fillColor: 'white',
               fillOpacity: 1,
               weight: 1,
+              interactive: !picking,
             })
               .bindTooltip('Requested point')
               .addTo(group);
@@ -626,7 +751,7 @@ export default function App() {
     return () => {
       group.remove();
     };
-  }, [data, result, selected, overlay, bucket, plannedPoints, dirty]);
+  }, [data, result, selected, overlay, bucket, plannedPoints, dirty, picking]);
 
   useEffect(() => {
     const m = map.current;
@@ -634,6 +759,23 @@ export default function App() {
     const group = L.layerGroup().addTo(m);
     activityBubbles.forEach((bubble) => {
       const active = bubble.id === selectedActivity;
+      const southwest = m.latLngToLayerPoint([
+        bubble.bounds[1],
+        bubble.bounds[0],
+      ]);
+      const northeast = m.latLngToLayerPoint([
+        bubble.bounds[3],
+        bubble.bounds[2],
+      ]);
+      // Keep a fixed-area bubble inside its cell as the map zooms out.
+      const cellPixels = Math.min(
+        Math.abs(northeast.x - southwest.x),
+        Math.abs(northeast.y - southwest.y),
+      );
+      const radius = Math.min(
+        bubbleRadius(bubble.count),
+        Math.max(3, cellPixels * 0.42),
+      );
       if (active)
         L.rectangle(
           [
@@ -653,11 +795,11 @@ export default function App() {
       const description = document.createElement('span');
       description.textContent = `${bubble.count} ${recent.source?.kind === 'calls' ? 'unverified calls' : 'published reports'} · approximate 250 m cell`;
       L.circleMarker(latlng(bubble.center), {
-        radius: bubbleRadius(bubble.count),
+        radius,
         color: active ? '#442469' : '#7040a3',
         weight: active ? 3 : 1.5,
         fillColor: '#cbb0e4',
-        fillOpacity: active ? 0.9 : 0.75,
+        fillOpacity: active ? 0.8 : 0.38,
         interactive: !picking,
         bubblingMouseEvents: false,
       })
@@ -665,6 +807,7 @@ export default function App() {
         .on('click', () => {
           if (pickRef.current) return;
           setSelectedActivity(bubble.id);
+          if (recentPanel.current) recentPanel.current.open = true;
           requestAnimationFrame(() =>
             recentPanel.current
               ?.querySelector('.recent-selection')
@@ -674,8 +817,7 @@ export default function App() {
         .addTo(group)
         .bringToBack();
       const label = document.createElement('span');
-      label.textContent = String(bubble.count);
-      const radius = bubbleRadius(bubble.count);
+      label.textContent = radius >= 9 ? String(bubble.count) : '';
       L.marker(latlng(bubble.center), {
         pane: 'recent-counts',
         interactive: false,
@@ -699,6 +841,7 @@ export default function App() {
     activityBubbles,
     selectedActivity,
     picking,
+    mapZoom,
   ]);
 
   useEffect(() => {
@@ -738,9 +881,7 @@ export default function App() {
           brisa<span className="brand-dot">.</span>
         </a>
         <span className="header-divider" />
-        <span className="header-context">
-          A little perspective for your next walk.
-        </span>
+        <span className="header-context">Walking directions</span>
         <div className="header-right">
           <span className="city-badge">
             <span />
@@ -758,15 +899,8 @@ export default function App() {
       <main className="workspace">
         <aside className="planner">
           <div className="planner-heading">
-            <span className="eyebrow">TAKE A DIFFERENT PERSPECTIVE</span>
-            <h1>
-              Your walk.
-              <br /> Your tradeoff.
-            </h1>
-            <p>
-              Compare walking routes with context from historical reported
-              incidents.
-            </p>
+            <h1>Plan a walk</h1>
+            <span>With local report context</span>
           </div>
           {catalog && (
             <div className="coverage-picker">
@@ -793,27 +927,6 @@ export default function App() {
                 </select>
                 <ChevronDown size={16} />
               </div>
-              {data && (
-                <>
-                  <div className="coverage-meta">
-                    <span>Bounded walking area · {period}</span>
-                    <button className="quiet-button" onClick={showCoverage}>
-                      <Scan size={14} /> Show coverage
-                    </button>
-                  </div>
-                  <details className="coverage-details">
-                    <summary>Coverage and source details</summary>
-                    <p className="coverage-description">{area?.description}</p>
-                    <p className="coverage-source">
-                      Source: {data.manifest.sourceName}
-                    </p>
-                    <p>
-                      {data.manifest.eligibleReportCount.toLocaleString()}{' '}
-                      eligible historical reports · {period}
-                    </p>
-                  </details>
-                </>
-              )}
               {notice && (
                 <p role="status" className="source-note">
                   {notice}
@@ -847,66 +960,76 @@ export default function App() {
                   e.preventDefault();
                   const a = resolve('origin'),
                     b = resolve('destination');
-                  if (a && b) compute(data, a, b);
+                  if (a && b) {
+                    setSearchTarget(null);
+                    compute(data, a, b);
+                  } else
+                    setError(
+                      'Choose both locations from the suggestions or on the map before finding routes.',
+                    );
                 }}
               >
                 <div className="endpoint-fields">
-                  {(['origin', 'destination'] as const).map((key, i) => (
-                    <div className="endpoint-field" key={key}>
-                      <span className={`endpoint-dot ${i ? 'end' : ''}`}>
-                        {i ? 'B' : 'A'}
-                      </span>
-                      <div className="field-inner">
-                        <label htmlFor={key}>{i ? 'TO' : 'FROM'}</label>
-                        <div className="select-wrap">
-                          <select
-                            id={key}
-                            value={key === 'origin' ? origin : destination}
-                            onChange={(e) => {
-                              (key === 'origin' ? setOrigin : setDestination)(
-                                e.target.value,
-                              );
-                              invalidatePlan();
-                            }}
-                          >
-                            {custom[key] && (
-                              <option value="custom">
-                                {customNames[key] ??
-                                  `${key === 'origin' ? 'Map start' : 'Map destination'} · ${custom[key]![1].toFixed(4)}, ${custom[key]![0].toFixed(4)}`}
-                              </option>
-                            )}
-                            {data.landmarks.map((l) => (
-                              <option key={l.id} value={l.id}>
-                                {l.name}
-                              </option>
-                            ))}
-                          </select>
-                          <ChevronDown size={14} />
-                        </div>
-                      </div>
-                      <button
-                        className={`icon-button pick-button ${picking === key ? 'active' : ''}`}
-                        type="button"
-                        aria-label={`Choose ${key} on map`}
-                        title={`Choose ${key} on map`}
-                        onClick={() => {
-                          setError('');
-                          mapReference.current = null;
-                          setPicking(picking === key ? null : key);
-                          if (picking !== key) showCoverage();
-                        }}
-                      >
-                        <MapPin size={17} />
-                      </button>
-                    </div>
+                  {(['origin', 'destination'] as const).map((key, index) => (
+                    <EndpointSearch
+                      key={`${areaId}:${key}`}
+                      id={key}
+                      label={index ? 'To' : 'From'}
+                      value={queries[key] ?? endpointLabel(key)}
+                      selected={
+                        queries[key] === undefined && !!endpointLabel(key)
+                      }
+                      onValueChange={(value) => {
+                        locationRequest.current += 1;
+                        setLocating(null);
+                        setQueries((previous) => ({
+                          ...previous,
+                          [key]: value,
+                        }));
+                        (key === 'origin' ? setOrigin : setDestination)('');
+                        setNotice('');
+                        invalidatePlan();
+                      }}
+                      onSearchActiveChange={(active) =>
+                        setSearchTarget((current) =>
+                          active ? key : current === key ? null : current,
+                        )
+                      }
+                      onSelect={(place) => chooseEndpoint(key, place)}
+                      results={searchTarget === key ? placeSearch.results : []}
+                      loading={searchTarget === key && placeSearch.loading}
+                      error={searchTarget === key ? placeSearch.error : ''}
+                      providerDisclosure={GEOCODER_ATTRIBUTION.disclosure}
+                      providerLink={GEOCODER_ATTRIBUTION}
+                      onMapSelect={() => {
+                        locationRequest.current += 1;
+                        setLocating(null);
+                        setSearchTarget(null);
+                        setError('');
+                        mapReference.current = null;
+                        setPicking(key);
+                        showCoverage();
+                      }}
+                      onLocateCurrent={
+                        key === 'origin' ? () => locateEndpoint(key) : undefined
+                      }
+                      locating={locating === key}
+                    />
                   ))}
                   <button
                     className="swap-button"
                     type="button"
                     aria-label="Swap start and destination"
                     onClick={() => {
+                      locationRequest.current += 1;
+                      setLocating(null);
+                      setSearchTarget(null);
                       setOrigin(destination);
                       setDestination(origin);
+                      setQueries({
+                        origin: queries.destination,
+                        destination: queries.origin,
+                      });
                       setCustom({
                         origin: custom.destination,
                         destination: custom.origin,
@@ -918,83 +1041,125 @@ export default function App() {
                       invalidatePlan();
                     }}
                   >
-                    <ArrowDownUp size={14} />
+                    <ArrowDownUp size={16} />
                   </button>
                 </div>
-                <div className="planner-actions">
-                  <span>Pick landmarks or use the map pins.</span>
-                  <button
-                    type="button"
-                    className="quiet-button"
-                    onClick={() => {
-                      if (!area) return;
-                      const start = data.landmarks.find(
-                        (item) => item.id === area.defaultOriginId,
-                      );
-                      const end = data.landmarks.find(
-                        (item) => item.id === area.defaultDestinationId,
-                      );
-                      if (!start || !end) return;
-                      incomingTrip.current = null;
-                      setOrigin(start.id);
-                      setDestination(end.id);
-                      setCustom({});
-                      setCustomNames({});
-                      setPicking(null);
-                      mapReference.current = null;
-                      setBucket(2);
-                      setBudget(8);
-                      setNotice('Example walk restored.');
-                      void compute(data, start.point, end.point, 2, 8);
-                    }}
-                  >
-                    Try example walk
-                  </button>
-                </div>
-                <label className="field-label" htmlFor="time-window">
-                  Historical time window <span>{data.manifest.timezone}</span>
-                </label>
-                <div className="select-wrap time-select">
-                  <select
-                    id="time-window"
-                    value={bucket}
-                    onChange={(e) => {
-                      setBucket(Number(e.target.value) as BucketIndex);
-                      invalidatePlan();
-                    }}
-                  >
-                    {windows.map((w, i) => (
-                      <option value={i} key={w}>
-                        {w}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown size={16} />
-                </div>
-                <div className="slider-title">
-                  <label htmlFor="detour">Room for a detour</label>
-                  <output htmlFor="detour">+{budget} min</output>
-                </div>
-                <input
-                  id="detour"
-                  type="range"
-                  min="0"
-                  max="15"
-                  value={budget}
-                  style={
-                    {
-                      '--range-progress': `${(budget / 15) * 100}%`,
-                    } as React.CSSProperties
-                  }
-                  onChange={(e) => {
-                    setBudget(Number(e.target.value));
-                    invalidatePlan();
-                  }}
-                />
-                <div className="range-labels">
-                  <span>Direct as possible</span>
-                  <span>Up to 15 min extra</span>
-                </div>
+                <details className="advanced-options">
+                  <summary>
+                    Advanced options{' '}
+                    <span>
+                      {windows[bucket]} · +{budget} min
+                    </span>
+                  </summary>
+                  <div className="advanced-content">
+                    <div className="planner-actions">
+                      <span>Restore the sample route</span>
+                      <button
+                        type="button"
+                        className="quiet-button"
+                        onClick={() => {
+                          if (!area) return;
+                          const start = data.landmarks.find(
+                            (item) => item.id === area.defaultOriginId,
+                          );
+                          const end = data.landmarks.find(
+                            (item) => item.id === area.defaultDestinationId,
+                          );
+                          if (!start || !end) return;
+                          incomingTrip.current = null;
+                          setOrigin(start.id);
+                          setDestination(end.id);
+                          setCustom({});
+                          setCustomNames({});
+                          setPicking(null);
+                          mapReference.current = null;
+                          setBucket(2);
+                          setBudget(8);
+                          setQueries({});
+                          setSearchTarget(null);
+                          locationRequest.current += 1;
+                          setLocating(null);
+                          setNotice('Example walk restored.');
+                          void compute(data, start.point, end.point, 2, 8);
+                        }}
+                      >
+                        Try example walk
+                      </button>
+                    </div>
+                    <label className="field-label" htmlFor="time-window">
+                      Historical time window{' '}
+                      <span>{data.manifest.timezone}</span>
+                    </label>
+                    <div className="select-wrap time-select">
+                      <select
+                        id="time-window"
+                        value={bucket}
+                        onChange={(e) => {
+                          setBucket(Number(e.target.value) as BucketIndex);
+                          invalidatePlan();
+                        }}
+                      >
+                        {windows.map((w, i) => (
+                          <option value={i} key={w}>
+                            {w}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown size={16} />
+                    </div>
+                    <div className="slider-title">
+                      <label htmlFor="detour">Room for a detour</label>
+                      <output htmlFor="detour">+{budget} min</output>
+                    </div>
+                    <input
+                      id="detour"
+                      type="range"
+                      min="0"
+                      max="15"
+                      value={budget}
+                      style={
+                        {
+                          '--range-progress': `${(budget / 15) * 100}%`,
+                        } as React.CSSProperties
+                      }
+                      onChange={(e) => {
+                        setBudget(Number(e.target.value));
+                        invalidatePlan();
+                      }}
+                    />
+                    <div className="range-labels">
+                      <span>Direct as possible</span>
+                      <span>Up to 15 min extra</span>
+                    </div>
+                    {data && (
+                      <>
+                        <div className="coverage-meta">
+                          <span>Bounded walking area · {period}</span>
+                          <button
+                            className="quiet-button"
+                            type="button"
+                            onClick={showCoverage}
+                          >
+                            <Scan size={14} /> Show coverage
+                          </button>
+                        </div>
+                        <details className="coverage-details">
+                          <summary>Coverage and source details</summary>
+                          <p className="coverage-description">
+                            {area?.description}
+                          </p>
+                          <p className="coverage-source">
+                            Source: {data.manifest.sourceName}
+                          </p>
+                          <p>
+                            {data.manifest.eligibleReportCount.toLocaleString()}{' '}
+                            eligible historical reports · {period}
+                          </p>
+                        </details>
+                      </>
+                    )}
+                  </div>
+                </details>
                 <button
                   className="compare-button"
                   type="submit"
@@ -1019,6 +1184,187 @@ export default function App() {
                   </button>
                 </div>
               )}
+            </>
+          )}
+        </aside>
+        <div className="map-workspace">
+          <section
+            ref={mapPanel}
+            className={`map-panel ${picking ? 'picking' : ''}`}
+            aria-label="Interactive walking route map"
+          >
+            <div
+              key={data?.manifest.datasetId ?? 'unloaded'}
+              ref={mapEl}
+              className="map-canvas"
+              tabIndex={0}
+              role="region"
+              aria-label={
+                picking
+                  ? `Map for choosing ${picking}. Use arrow keys to pan, then confirm with Use map center.`
+                  : 'Walking map'
+              }
+            />
+            <div className="map-location">
+              <Compass size={20} />
+              <div>
+                <strong>
+                  {area ? `${area.region}, ${area.city}` : 'Supported coverage'}
+                </strong>
+                <span>
+                  {data
+                    ? `${windows[bucket]} · ${period} reports`
+                    : 'Choose a supported area to plan a walk'}
+                </span>
+              </div>
+              <span className="map-location-tag">{area?.regionCode}</span>
+            </div>
+            {data && (
+              <div className="map-tools">
+                <button
+                  className={overlay ? 'active' : ''}
+                  onClick={() => setOverlay((v) => !v)}
+                  aria-pressed={overlay}
+                  aria-label="Toggle reported incident intensity"
+                >
+                  <Layers size={19} />
+                </button>
+                <button
+                  onClick={() => setFit((v) => v + 1)}
+                  aria-label="Fit routes to map"
+                  title="Fit routes to map"
+                  disabled={!route || !!picking}
+                >
+                  <LocateFixed size={19} />
+                </button>
+                <button
+                  onClick={showCoverage}
+                  aria-label="Show coverage boundary"
+                  title="Show coverage boundary"
+                >
+                  <Scan size={19} />
+                </button>
+              </div>
+            )}
+            {picking && (
+              <div className="map-center-marker" aria-hidden="true">
+                <span>+</span>
+              </div>
+            )}
+            {data && (
+              <div className="map-bottom">
+                <div className="map-legend">
+                  <div className="legend-title">
+                    <span className="legend-route" />
+                    Selected walk
+                    <span className="legend-route dashed" />
+                    Alternative
+                  </div>
+                  {overlay && (
+                    <>
+                      <div className="intensity-scale">
+                        <span>Lower</span>
+                        <i />
+                        <span>Higher</span>
+                      </div>
+                      <p className="legend-caveat">
+                        No reports does not mean no risk.
+                      </p>
+                    </>
+                  )}
+                  <button
+                    className="intensity-toggle activity-layer-toggle"
+                    aria-pressed={recent.enabled}
+                    onClick={recent.onToggle}
+                  >
+                    <span>
+                      <i className="activity-key" /> Latest activity bubbles
+                    </span>
+                    <span className={`toggle ${recent.enabled ? 'on' : ''}`} />
+                  </button>
+                  {recent.enabled && (
+                    <p className="legend-caveat activity-legend-note">
+                      {recent.loading
+                        ? 'Checking source…'
+                        : recent.error
+                          ? 'Update unavailable · see details'
+                          : recent.source?.kind === 'calls'
+                            ? 'Dispatch updates · delayed'
+                            : recent.feed
+                              ? `Report window ends ${recent.feed.windowEnd.slice(0, 10)}`
+                              : 'See source availability'}
+                      <button onClick={showActivityDetails}>
+                        Details & dates
+                      </button>
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+            {tileError && (
+              <div className="tile-status" role="status">
+                Base tiles unavailable · bundled streets shown
+              </div>
+            )}
+          </section>
+          {route && (
+            <button
+              className="route-map-label"
+              onClick={() =>
+                document
+                  .querySelector('.results')
+                  ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              }
+              aria-label="View selected walk details"
+            >
+              <Footprints size={16} />
+              <span className="route-label-action">View tradeoff</span>
+              <strong className="route-label-metric">
+                {Math.ceil(route.minutes)} min
+              </strong>
+              <span className="route-label-metric">
+                · {distance(route.meters)}
+              </span>
+              <ArrowRight size={14} />
+            </button>
+          )}
+          {picking && data && (
+            <MapPickerControls
+              key={`${areaId}:${picking}`}
+              data={data}
+              target={picking}
+              error={error}
+              onCancel={() => {
+                const target = picking;
+                setPicking(null);
+                setError('');
+                mapReference.current = null;
+                returnToForm(target);
+              }}
+              onUseCenter={() => {
+                const center = map.current?.getCenter();
+                if (center) confirmMapPoint(picking, [center.lng, center.lat]);
+              }}
+              onFocusMap={() => {
+                revealMap();
+                mapEl.current?.focus({ preventScroll: true });
+              }}
+              onLocate={(place) => {
+                mapReference.current = place;
+                map.current?.setView(latlng(place.point), 17, {
+                  animate: false,
+                });
+                revealMap();
+              }}
+            />
+          )}
+        </div>
+        <section
+          className="results-panel"
+          aria-label="Walking options and context"
+        >
+          {data && (
+            <>
               <section
                 className="results"
                 aria-label="Route comparison"
@@ -1103,9 +1449,8 @@ export default function App() {
                 <p className="index-note">
                   <Info size={14} />
                   <span>
-                    Exposure is a historical report index, not a prediction of
-                    personal risk. Indices compare routes within the selected
-                    snapshot, not across cities.
+                    Historical report index, not a safety prediction. Compare
+                    routes within this area.
                   </span>
                 </p>
                 {route && area && plannedPoints && (
@@ -1133,7 +1478,10 @@ export default function App() {
                 )}
               </section>
               {area && (
-                <div ref={recentPanel}>
+                <details className="activity-details" ref={recentPanel}>
+                  <summary>
+                    Activity details <span>{recent.statusLabel}</span>
+                  </summary>
                   <RecentReports
                     area={area}
                     {...recent}
@@ -1154,7 +1502,7 @@ export default function App() {
                         map.current.panTo(latlng(bubble.center));
                     }}
                   />
-                </div>
+                </details>
               )}
             </>
           )}
@@ -1165,194 +1513,7 @@ export default function App() {
               Data & method <ArrowUpRight size={13} />
             </button>
           </div>
-        </aside>
-        <div className="map-workspace">
-          <section
-            ref={mapPanel}
-            className={`map-panel ${picking ? 'picking' : ''}`}
-            aria-label="Interactive walking route map"
-          >
-            <div
-              key={data?.manifest.datasetId ?? 'unloaded'}
-              ref={mapEl}
-              className="map-canvas"
-              tabIndex={0}
-              role="region"
-              aria-label={
-                picking
-                  ? `Map for choosing ${picking}. Use arrow keys to pan, then confirm with Use map center.`
-                  : 'Walking map'
-              }
-            />
-            <div className="map-location">
-              <Compass size={20} />
-              <div>
-                <strong>
-                  {area ? `${area.region}, ${area.city}` : 'Supported coverage'}
-                </strong>
-                <span>
-                  {data
-                    ? `${windows[bucket]} · ${period} reports`
-                    : 'Choose a supported area to plan a walk'}
-                </span>
-              </div>
-              <span className="map-location-tag">{area?.regionCode}</span>
-            </div>
-            {data && (
-              <div className="map-tools">
-                <button
-                  className={overlay ? 'active' : ''}
-                  onClick={() => setOverlay((v) => !v)}
-                  aria-pressed={overlay}
-                  aria-label="Toggle reported incident intensity"
-                >
-                  <Layers size={19} />
-                </button>
-                <button
-                  onClick={() => setFit((v) => v + 1)}
-                  aria-label="Fit routes to map"
-                  title="Fit routes to map"
-                  disabled={!route || !!picking}
-                >
-                  <LocateFixed size={19} />
-                </button>
-                <button
-                  onClick={showCoverage}
-                  aria-label="Show coverage boundary"
-                  title="Show coverage boundary"
-                >
-                  <Scan size={19} />
-                </button>
-              </div>
-            )}
-            {picking && (
-              <div className="map-center-marker" aria-hidden="true">
-                <span>+</span>
-              </div>
-            )}
-            {data && (
-              <div className="map-bottom">
-                <div className="map-legend">
-                  <div className="legend-title">
-                    <span className="legend-route" />
-                    Selected walk
-                    <span className="legend-route dashed" />
-                    Alternative
-                  </div>
-                  <button
-                    className="intensity-toggle"
-                    onClick={() => setOverlay((v) => !v)}
-                    aria-pressed={overlay}
-                  >
-                    <span>Reported incident intensity</span>
-                    <span className={`toggle ${overlay ? 'on' : ''}`} />
-                  </button>
-                  {overlay && (
-                    <>
-                      <div className="intensity-scale">
-                        <span>Lower</span>
-                        <i />
-                        <span>Higher</span>
-                      </div>
-                      <p className="legend-caveat">
-                        No reports does not mean no risk.
-                      </p>
-                    </>
-                  )}
-                  <button
-                    className="intensity-toggle activity-layer-toggle"
-                    aria-pressed={recent.enabled}
-                    onClick={recent.onToggle}
-                  >
-                    <span>
-                      <i className="activity-key" /> Latest activity bubbles
-                    </span>
-                    <span className={`toggle ${recent.enabled ? 'on' : ''}`} />
-                  </button>
-                  {recent.enabled && (
-                    <p className="legend-caveat activity-legend-note">
-                      {recent.loading
-                        ? 'Checking source…'
-                        : recent.error
-                          ? 'Update unavailable · see details'
-                          : recent.source?.kind === 'calls'
-                            ? 'Unverified calls · 48-hour window'
-                            : recent.feed
-                              ? `${recent.feed.windowStart.slice(0, 10)} – ${recent.feed.windowEnd.slice(0, 10)}`
-                              : 'See source availability'}
-                      <button
-                        onClick={() =>
-                          recentPanel.current?.scrollIntoView({
-                            behavior: 'smooth',
-                            block: 'start',
-                          })
-                        }
-                      >
-                        Details & dates
-                      </button>
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
-            {tileError && (
-              <div className="tile-status" role="status">
-                Base tiles unavailable · bundled streets shown
-              </div>
-            )}
-            {route && (
-              <button
-                className="route-map-label"
-                onClick={() =>
-                  document
-                    .querySelector('.results')
-                    ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                }
-                aria-label="View selected walk details"
-              >
-                <Footprints size={16} />
-                <span className="route-label-action">View tradeoff</span>
-                <strong className="route-label-metric">
-                  {Math.ceil(route.minutes)} min
-                </strong>
-                <span className="route-label-metric">
-                  · {distance(route.meters)}
-                </span>
-                <ArrowRight size={14} />
-              </button>
-            )}
-          </section>
-          {picking && data && (
-            <MapPickerControls
-              key={`${areaId}:${picking}`}
-              data={data}
-              target={picking}
-              error={error}
-              onCancel={() => {
-                const target = picking;
-                setPicking(null);
-                setError('');
-                mapReference.current = null;
-                returnToForm(target);
-              }}
-              onUseCenter={() => {
-                const center = map.current?.getCenter();
-                if (center) confirmMapPoint(picking, [center.lng, center.lat]);
-              }}
-              onFocusMap={() => {
-                revealMap();
-                mapEl.current?.focus({ preventScroll: true });
-              }}
-              onLocate={(place) => {
-                mapReference.current = place;
-                map.current?.setView(latlng(place.point), 17, {
-                  animate: false,
-                });
-                revealMap();
-              }}
-            />
-          )}
-        </div>
+        </section>
       </main>
       <dialog
         ref={dialogRef}

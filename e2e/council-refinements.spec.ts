@@ -1,6 +1,8 @@
+import { openAdvanced } from './ui-helpers';
 import { readFileSync } from 'node:fs';
 import AxeBuilder from '@axe-core/playwright';
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './fixtures';
+import type { Page } from '@playwright/test';
 import { buildPlaceIndex, searchPlaces } from '../src/domain/place-search';
 import { haversine, planRoutes } from '../src/domain/routing';
 import { compareRoutes } from '../src/domain/route-insights';
@@ -18,6 +20,7 @@ const ready = async (page: Page, area = chicago.id) => {
   await expect(page.locator('.route-card').first()).toBeVisible({
     timeout: 15000,
   });
+  await openAdvanced(page);
 };
 const picker = (page: Page) => page.locator('.guided-picker');
 async function findPlace(page: Page, query: string) {
@@ -91,11 +94,9 @@ test('guided keyboard map choice returns focus and removes stale results while c
   await picker(page)
     .getByRole('button', { name: 'Use map center', exact: true })
     .click();
-  await expect(page.locator('#origin')).toHaveValue('custom');
+  await expect(page.locator('#origin')).toHaveValue(/^-?\d+\.\d+, -?\d+\.\d+$/);
   await expect(page.locator('#origin')).toBeFocused();
-  await expect(page.locator('#origin option:checked')).not.toHaveText(
-    'Custom location',
-  );
+  await expect(page.locator('#origin')).not.toHaveValue('Custom location');
   await expect(page.locator('.route-card')).toHaveCount(0);
   await expect(
     page.getByRole('button', { name: 'Share trip', exact: true }),
@@ -108,7 +109,9 @@ test('guided keyboard map choice returns focus and removes stale results while c
   await expect(page.locator('.route-card').first()).toBeVisible({
     timeout: 15000,
   });
-  await expect(page.locator('#origin')).toHaveValue(chicago.defaultOriginId);
+  await expect(page.locator('#origin')).toHaveValue(
+    dataset.landmarks.find((l) => l.id === chicago.defaultOriginId)!.name,
+  );
   await expect(page.getByLabel('Historical time window')).toHaveValue('2');
   await expect(page.getByLabel('Room for a detour')).toHaveValue('8');
 });
@@ -144,9 +147,7 @@ test('São Paulo local street search confirms the actual graph reference in a sh
   const trip = await confirmAndShare(page);
   // Leaflet can round a resized map center by less than one display pixel.
   expect(haversine(trip.request.origin, reference.point)).toBeLessThan(1);
-  await expect(page.locator('#origin option:checked')).toContainText(
-    reference.name,
-  );
+  await expect(page.locator('#origin')).toHaveValue(`Near ${reference.name}`);
 });
 
 test('route takeaway and street differences match selected actual graph paths', async ({

@@ -1,5 +1,7 @@
+import { openAdvanced, openWalkDetails } from './ui-helpers';
 import { readFileSync } from 'node:fs';
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './fixtures';
+import type { Page } from '@playwright/test';
 import { planRoutes } from '../src/domain/routing';
 import { parseTripUrl, routePreference } from '../src/domain/trip-tools';
 import type {
@@ -24,8 +26,12 @@ const initialRequest: PlanRequest = {
   bucket: 2,
   maxExtraMinutes: 8,
 };
-const ready = (page: Page) =>
-  expect(page.locator('.route-card').first()).toBeVisible({ timeout: 15000 });
+const ready = async (page: Page) => {
+  await expect(page.locator('.route-card').first()).toBeVisible({
+    timeout: 15000,
+  });
+  await openAdvanced(page);
+};
 async function downloadText(page: Page, label: string) {
   const pending = page.waitForEvent('download');
   await page.getByRole('button', { name: label, exact: true }).click();
@@ -116,9 +122,11 @@ test('explicit sharing restores request and semantic selection while keeping coo
   await expect(
     page.getByText('Shared trip loaded', { exact: false }),
   ).toBeVisible();
-  await expect(page.locator('#origin')).toHaveValue(area.defaultOriginId);
+  await expect(page.locator('#origin')).toHaveValue(
+    dataset.landmarks.find((l) => l.id === area.defaultOriginId)!.name,
+  );
   await expect(page.locator('#destination')).toHaveValue(
-    area.defaultDestinationId,
+    dataset.landmarks.find((l) => l.id === area.defaultDestinationId)!.name,
   );
   await expect(page.getByLabel('Historical time window')).toHaveValue('3');
   await expect(page.getByLabel('Room for a detour')).toHaveValue('13');
@@ -178,6 +186,7 @@ test('shows the selected street sequence and four-window profile with separate c
   await ready(page);
   await page.locator('.route-card').last().click();
   const expected = planRoutes(dataset, initialRequest).routes.at(-1)!;
+  await openWalkDetails(page);
   const details = page.locator('details.street-sequence');
   await details.locator('summary').click();
   for (const segment of expected.segments)
@@ -230,11 +239,13 @@ test('map picking explains unsupported points beside the map and accepts a point
   await canvas.click({ position: { x: 5, y: bounds!.height / 2 } });
   await expect(page.locator('.pick-banner').getByRole('alert')).toBeVisible();
   await expect(page.locator('.pick-banner')).toContainText('inside');
-  await expect(page.locator('#origin')).toHaveValue(area.defaultOriginId);
+  await expect(page.locator('#origin')).toHaveValue(
+    dataset.landmarks.find((l) => l.id === area.defaultOriginId)!.name,
+  );
   await canvas.click({
     position: { x: bounds!.width / 2, y: bounds!.height / 2 },
   });
-  await expect(page.locator('#origin')).toHaveValue('custom');
+  await expect(page.locator('#origin')).toHaveValue(/^-?\d+\.\d+, -?\d+\.\d+$/);
   await expect(page.locator('.pick-banner')).toHaveCount(0);
   await expect(page.locator('.route-card')).toHaveCount(0);
 });

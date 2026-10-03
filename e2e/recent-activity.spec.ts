@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, test } from './fixtures';
+import type { Page, Route } from '@playwright/test';
 const NYC = '**/resource/5uac-w243.json?**';
 const SF = '**/resource/gnap-fj3t.json?**';
 const now = new Date('2026-10-03T14:15:00Z');
@@ -60,9 +61,31 @@ async function ready(page: Page, area = 'nyc-manhattan') {
     timeout: 15000,
   });
 }
+async function openActivity(page: Page) {
+  const details = page.locator('details.activity-details');
+  if (
+    !(await details.evaluate((element) => (element as HTMLDetailsElement).open))
+  )
+    await details.locator('summary').first().click();
+}
 async function enable(page: Page) {
-  await panel(page)
-    .getByRole('button', { name: 'Show latest activity', exact: true })
+  await openActivity(page);
+  const show = panel(page).getByRole('button', {
+    name: 'Show latest activity',
+    exact: true,
+  });
+  if (await show.count()) await show.click();
+}
+async function showCoverage(page: Page) {
+  const advanced = page.locator('details.advanced-options');
+  if (
+    !(await advanced.evaluate(
+      (element) => (element as HTMLDetailsElement).open,
+    ))
+  )
+    await advanced.locator('summary').first().click();
+  await page
+    .getByRole('button', { name: 'Show coverage', exact: true })
     .click();
 }
 test.beforeEach(async ({ page }) => {
@@ -133,7 +156,7 @@ test('SF labels dispatch calls, rolling window and publication delay without cal
   await ready(page, 'sf-downtown');
   await enable(page);
   await expect(cells(page)).toHaveCount(1);
-  await expect(panel(page)).toContainText('Selected dispatch calls');
+  await expect(panel(page)).toContainText('Dispatch updates · delayed');
   await expect(panel(page)).toContainText('Additional 10-minute delay');
   await expect(panel(page)).toContainText(
     'Dispatch calls are not confirmed crimes',
@@ -257,8 +280,9 @@ test('turning off aborts pending work; enabling again loads a fresh request and 
     timeout: 15000,
   });
   releaseSecond();
+  await openActivity(page);
   await expect(
-    panel(page).getByRole('button', { name: 'Show latest activity' }),
+    panel(page).getByRole('button', { name: 'Hide latest activity' }),
   ).toBeVisible();
   await expect(page.locator('.activity-count')).toHaveCount(0);
   await expect(panel(page)).not.toContainText('NYPD');
@@ -267,6 +291,8 @@ test('turning off aborts pending work; enabling again loads a fresh request and 
 async function clickFirstBubble(page: Page) {
   const marker = page.locator('.activity-count').first();
   await marker.scrollIntoViewIfNeeded();
+  // Flush zoom/layout and Canvas animation frames under the controlled clock.
+  await page.clock.runFor(400);
   const box = await marker.boundingBox();
   expect(box).not.toBeNull();
   // Counts intentionally ignore pointer events: use a real click through the label
@@ -285,15 +311,26 @@ async function clickFirstBubble(page: Page) {
 test('a real canvas bubble click opens its persistent cell details', async ({
   page,
 }) => {
-  await page.route(NYC, (route) => fulfill(route));
+  // Keep this bubble clear of the A/B markers at the mobile coverage zoom.
+  // The following test separately exercises an overlapping endpoint and bubble.
+  const distinctRows = nycRows.map((row) => ({
+    ...row,
+    longitude: '-74.007',
+    latitude: '40.714',
+  }));
+  await page.route(NYC, (route) => fulfill(route, distinctRows));
   await ready(page);
   await enable(page);
-  await expect(cells(page)).toHaveCount(2);
+  await expect(cells(page)).toHaveCount(1);
   await panel(page).getByLabel('Activity category').selectOption('Robbery');
   await expect(cells(page)).toHaveCount(1);
   await page
-    .getByRole('button', { name: 'Show coverage', exact: true })
+    .locator('details.activity-details')
+    .locator('summary')
+    .first()
     .click();
+  await page.clock.runFor(400);
+  await showCoverage(page);
   await clickFirstBubble(page);
   await expect(
     panel(page).getByRole('region', { name: 'Selected activity cell' }),
@@ -313,12 +350,10 @@ test('endpoint picking takes precedence over the canvas bubble at the same posit
   await expect(cells(page)).toHaveCount(2);
   await panel(page).getByLabel('Activity category').selectOption('Robbery');
   await expect(cells(page)).toHaveCount(1);
-  await page
-    .getByRole('button', { name: 'Show coverage', exact: true })
-    .click();
+  await showCoverage(page);
   await page.getByRole('button', { name: 'Choose origin on map' }).click();
   await clickFirstBubble(page);
-  await expect(page.locator('#origin')).toHaveValue('custom');
+  await expect(page.locator('#origin')).toHaveValue(/^40\.\d{4}, -74\.\d{4}$/);
   await expect(
     panel(page).getByRole('region', { name: 'Selected activity cell' }),
   ).toHaveCount(0);
@@ -398,4 +433,53 @@ test('a cooldown retry paused in a hidden tab resumes immediately when visible',
   await panel(page).locator('summary').click();
   await expect(panel(page)).toContainText('2026-10-03 14:15:');
   release();
+});
+
+test('zoom changes dense bubble radius while preserving fixed cells, counts and selection', async ({
+  page,
+}) => {
+  const dense = Array.from({ length: 50 }, (_, index) => ({
+    ...nycRows[0],
+    cmplnt_num: `dense-${index}`,
+    longitude: '-73.988',
+    latitude: index < 25 ? '40.751' : '40.754',
+  }));
+  await page.route(NYC, (route) => fulfill(route, dense));
+  await ready(page);
+  await enable(page);
+  await expect(cells(page)).toHaveCount(2);
+  await expect(panel(page)).toContainText('50 shown in 2 approximate cells');
+  const cellDescriptions = await cells(page).allTextContents();
+  await showCoverage(page);
+  const marker = page.locator('.activity-count').first();
+  const diameter = () =>
+    marker.evaluate((element) =>
+      parseFloat((element as HTMLElement).style.width),
+    );
+  async function zoom(direction: 'in' | 'out', times: number) {
+    for (let step = 0; step < times; step++) {
+      await page.locator(`.leaflet-control-zoom-${direction}`).click();
+      await page.clock.runFor(400);
+    }
+  }
+  await page.clock.runFor(600);
+  await zoom('in', 3);
+  const original = await diameter();
+  expect(original).toBeGreaterThan(6);
+  await zoom('out', 3);
+  await expect.poll(diameter).toBeLessThan(original);
+  const small = await diameter();
+  await expect(page.locator('.activity-count')).toHaveCount(2);
+  expect(await cells(page).allTextContents()).toEqual(cellDescriptions);
+  await zoom('in', 3);
+  await expect.poll(diameter).toBeGreaterThan(small);
+  expect(await diameter()).toBeLessThanOrEqual(64);
+  await expect(page.locator('.activity-count')).toHaveCount(2);
+  expect(await cells(page).allTextContents()).toEqual(cellDescriptions);
+  // The equivalent list remains selectable even when zoom puts a cell offscreen.
+  await cells(page).first().click();
+  await expect(
+    panel(page).getByRole('region', { name: 'Selected activity cell' }),
+  ).toContainText('Robbery: 25');
+  await expect(panel(page)).toContainText('50 shown in 2 approximate cells');
 });

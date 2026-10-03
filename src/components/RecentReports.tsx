@@ -18,6 +18,8 @@ export interface RecentReportsProps {
   error: string;
   onRefresh: () => void;
   refreshDisabled: boolean;
+  statusLabel?: string;
+  checkIntervalLabel?: string;
   bubbles: RecentBubble[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
@@ -43,6 +45,8 @@ export default function RecentReports({
   error,
   onRefresh,
   refreshDisabled,
+  statusLabel,
+  checkIntervalLabel,
   bubbles,
   selectedId,
   onSelect,
@@ -89,9 +93,10 @@ export default function RecentReports({
             <>
               <div className="recent-heading">
                 <h3>
-                  {source.kind === 'calls'
-                    ? 'Selected dispatch calls'
-                    : 'Latest published reports'}
+                  {statusLabel ??
+                    (source.kind === 'calls'
+                      ? 'Dispatch updates · delayed'
+                      : 'Published reports · delayed')}
                 </h3>
                 <button
                   className="recent-refresh"
@@ -106,6 +111,12 @@ export default function RecentReports({
               <p>
                 {source.cadence} · {source.delayNote}
               </p>
+              {checkIntervalLabel && (
+                <p className="recent-check-cadence">
+                  {checkIntervalLabel}. New publications appear automatically;
+                  this is not an instant event feed.
+                </p>
+              )}
               <p className="recent-model-note">
                 Route scores still use 2025 historical reports. These bubbles do
                 not change your route or predict safety.

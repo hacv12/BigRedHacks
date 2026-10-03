@@ -6,8 +6,9 @@ import { getRecentSource, loadRecentFeed } from './recent-reports';
 /** Session-only cache: no individual reports are persisted to browser storage. */
 export function useRecentActivity(area: CoverageArea | undefined) {
   const source = area ? getRecentSource(area.cityId) : undefined;
-  const [enabledArea, setEnabledArea] = useState<string>();
-  const enabled = !!area && enabledArea === area.id;
+  // One session preference: switching cities must not undo the user's OFF choice.
+  const [showActivity, setShowActivity] = useState(true);
+  const enabled = !!area && showActivity;
   const [state, setState] = useState<{
     areaId: string;
     feed: RecentFeed | null;
@@ -21,15 +22,20 @@ export function useRecentActivity(area: CoverageArea | undefined) {
   const deferredRetry = useRef(false);
   const lastAttempt = useRef({ areaId: '', at: 0 });
   const [cooldownUntil, setCooldownUntil] = useState(0);
+  const nextCheckAt = useRef(0);
 
   useEffect(() => {
-    setEnabledArea(undefined);
+    nextCheckAt.current = 0;
     setCooldownUntil(0);
   }, [area?.id]);
 
   const refresh = useCallback(
     async (force = false): Promise<void> => {
       if (!area || !source || !enabled || controller.current) return;
+      if (document.visibilityState !== 'visible') {
+        deferredRetry.current = true;
+        return;
+      }
       const now = Date.now();
       const cached = cache.current.get(area.id);
       if (
@@ -37,7 +43,14 @@ export function useRecentActivity(area: CoverageArea | undefined) {
         cached &&
         now - Date.parse(cached.checkedAt) < source.refreshIntervalMs
       ) {
-        setState({ areaId: area.id, feed: cached, loading: false, error: '' });
+        nextCheckAt.current =
+          Date.parse(cached.checkedAt) + source.refreshIntervalMs;
+        setState((previous) => ({
+          areaId: area.id,
+          feed: cached,
+          loading: false,
+          error: previous.areaId === area.id ? previous.error : '',
+        }));
         return;
       }
       if (
@@ -64,6 +77,7 @@ export function useRecentActivity(area: CoverageArea | undefined) {
       }
       lastAttempt.current = { areaId: area.id, at: now };
       deferredRetry.current = false;
+      nextCheckAt.current = now + source.refreshIntervalMs;
       setCooldownUntil(now + 30_000);
       const active = new AbortController();
       controller.current = active;
@@ -80,9 +94,12 @@ export function useRecentActivity(area: CoverageArea | undefined) {
         if (feed.areaId !== area.id || feed.sourceId !== source.id)
           throw new Error('The update did not match this coverage area.');
         cache.current.set(area.id, feed);
+        nextCheckAt.current = Date.now() + source.refreshIntervalMs;
         setState({ areaId: area.id, feed, loading: false, error: '' });
       } catch (error) {
         if (active.signal.aborted || request.current !== current) return;
+        // A transient outage should not wait hours for the next publication check.
+        nextCheckAt.current = Date.now() + 60_000;
         setState({
           areaId: area.id,
           feed: cached ?? null,
@@ -103,14 +120,23 @@ export function useRecentActivity(area: CoverageArea | undefined) {
     if (!enabled || !source) return;
     void refresh();
     const check = () => {
-      if (
-        document.visibilityState === 'visible' &&
-        (deferredRetry.current ||
-          Date.now() - lastAttempt.current.at >= source.refreshIntervalMs)
-      )
+      if (document.visibilityState !== 'visible') {
+        if (controller.current || retryTimer.current !== null) {
+          deferredRetry.current = true;
+          request.current += 1;
+          controller.current?.abort();
+          controller.current = null;
+          if (retryTimer.current !== null)
+            window.clearTimeout(retryTimer.current);
+          retryTimer.current = null;
+          setState((previous) => ({ ...previous, loading: false }));
+        }
+        return;
+      }
+      if (deferredRetry.current || Date.now() >= nextCheckAt.current)
         void refresh(true);
     };
-    const timer = window.setInterval(check, source.refreshIntervalMs);
+    const timer = window.setInterval(check, 30_000);
     document.addEventListener('visibilitychange', check);
     return () => {
       window.clearInterval(timer);
@@ -136,7 +162,17 @@ export function useRecentActivity(area: CoverageArea | undefined) {
   return {
     source,
     enabled,
-    onToggle: () => setEnabledArea(enabled ? undefined : area?.id),
+    onToggle: () => setShowActivity((value) => !value),
+    statusLabel: !source
+      ? 'No recent feed'
+      : source.kind === 'calls'
+        ? 'Dispatch updates · delayed'
+        : 'Published reports · delayed',
+    checkIntervalLabel: source
+      ? source.refreshIntervalMs < 3_600_000
+        ? `Checks every ${source.refreshIntervalMs / 60_000} min while visible`
+        : `Checks every ${source.refreshIntervalMs / 3_600_000} h while visible`
+      : 'No automatic checks',
     feed: enabled && state.areaId === area?.id ? state.feed : null,
     loading: enabled && state.areaId === area?.id && state.loading,
     error: enabled && state.areaId === area?.id ? state.error : '',

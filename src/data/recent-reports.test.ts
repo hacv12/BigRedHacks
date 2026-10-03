@@ -220,3 +220,19 @@ describe('recent feed failure and revision handling', () => {
     }
   });
 });
+
+it('checks publications at source-specific intervals without disguising publisher delays', () => {
+  expect(getRecentSource('sf')).toMatchObject({
+    refreshIntervalMs: 60_000,
+    cadence: 'Every 10 minutes',
+  });
+  expect(getRecentSource('chicago')).toMatchObject({
+    refreshIntervalMs: 3_600_000,
+    cadence: 'Daily',
+  });
+  expect(getRecentSource('nyc')).toMatchObject({
+    refreshIntervalMs: 21_600_000,
+    cadence: 'Quarterly',
+  });
+  expect(getRecentSource('sao-paulo')).toBeUndefined();
+});

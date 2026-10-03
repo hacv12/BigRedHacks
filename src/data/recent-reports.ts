@@ -99,7 +99,13 @@ const sources: Record<string, RecentSource> = Object.fromEntries(
           ? 'Locations anonymized to nearby intersections.'
           : 'Approximate block locations, not exact incident sites.',
       eventLabel: cityId === 'sf' ? 'Call received' : 'Occurred',
-      refreshIntervalMs: 600_000,
+      // Poll frequency detects published updates; it cannot remove publisher lag.
+      refreshIntervalMs:
+        cityId === 'sf'
+          ? 60_000
+          : cityId === 'chicago'
+            ? 3_600_000
+            : 21_600_000,
     },
   ]),
 );

@@ -1,5 +1,7 @@
+import { openAdvanced } from './ui-helpers';
 import { readFileSync } from 'node:fs';
-import { test, expect as baseExpect, type Page } from '@playwright/test';
+import { test, expect as baseExpect } from './fixtures';
+import type { Page } from '@playwright/test';
 import type {
   CityCatalog,
   CityDataset,
@@ -18,6 +20,10 @@ const routesReady = (page: Page) =>
   expect(page.locator('.route-card').first()).toBeVisible({ timeout: 15_000 });
 
 async function expectCity(page: Page, area: CoverageArea) {
+  await openAdvanced(page);
+  const data: CityDataset = JSON.parse(
+    readFileSync(`public${area.datasetUrl}`, 'utf8'),
+  );
   await expect(citySelect(page)).toHaveValue(area.id);
   await expect(page.locator('.map-location strong')).toHaveText(
     `${area.region}, ${area.city}`,
@@ -25,9 +31,11 @@ async function expectCity(page: Page, area: CoverageArea) {
   await expect(page.locator('.coverage-description')).toHaveText(
     area.description,
   );
-  await expect(page.locator('#origin')).toHaveValue(area.defaultOriginId);
+  await expect(page.locator('#origin')).toHaveValue(
+    data.landmarks.find((l) => l.id === area.defaultOriginId)!.name,
+  );
   await expect(page.locator('#destination')).toHaveValue(
-    area.defaultDestinationId,
+    data.landmarks.find((l) => l.id === area.defaultDestinationId)!.name,
   );
   await expect(page.getByLabel('Historical time window')).toHaveValue('2');
   await expect(
@@ -125,7 +133,8 @@ test('switches both ways and resets custom endpoints and route settings', async 
   await page
     .locator('.map-canvas')
     .click({ position: { x: mapBox!.width / 2, y: mapBox!.height / 2 } });
-  await expect(page.locator('#origin')).toHaveValue('custom');
+  await expect(page.locator('#origin')).toHaveValue(/^-?\d+\.\d+, -?\d+\.\d+$/);
+  await openAdvanced(page);
   await page.getByLabel('Historical time window').selectOption('3');
   await page.getByLabel('Room for a detour').fill('13');
   await page
@@ -134,7 +143,9 @@ test('switches both ways and resets custom endpoints and route settings', async 
   await citySelect(page).selectOption(chicago.id);
   await routesReady(page);
   await expectCity(page, chicago);
-  await expect(page.locator('option[value="custom"]')).toHaveCount(0);
+  await expect(page.locator('#origin')).not.toHaveValue(
+    /^-?\d+\.\d+, -?\d+\.\d+$/,
+  );
   await expect(page.getByLabel('Room for a detour')).toHaveValue('8');
   await expect(
     page.getByRole('button', { name: 'Toggle reported incident intensity' }),
@@ -143,7 +154,9 @@ test('switches both ways and resets custom endpoints and route settings', async 
   await citySelect(page).selectOption(nyc.id);
   await routesReady(page);
   await expectCity(page, nyc);
-  await expect(page.locator('option[value="custom"]')).toHaveCount(0);
+  await expect(page.locator('#origin')).not.toHaveValue(
+    /^-?\d+\.\d+, -?\d+\.\d+$/,
+  );
   await expect(page.locator('.leaflet-container')).toHaveCount(1);
   expect(errors).toEqual([]);
 });

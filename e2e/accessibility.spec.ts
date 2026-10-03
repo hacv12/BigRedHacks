@@ -1,5 +1,6 @@
+import { openWalkDetails } from './ui-helpers';
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test('planner, trip details and methodology pass automated WCAG checks without viewport overflow', async ({
   page,
@@ -62,6 +63,7 @@ test('planner, trip details and methodology pass automated WCAG checks without v
 
   await audit('loaded-planner');
   await checkOverflow('loaded-planner');
+  await openWalkDetails(page);
   await page.locator('details.street-sequence > summary').click();
   await page.getByRole('button', { name: 'Share trip', exact: true }).click();
   await expect(page.getByLabel('Shareable trip link')).toBeVisible();

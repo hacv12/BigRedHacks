@@ -1,4 +1,5 @@
-import { test, expect } from '@playwright/test';
+import { openAdvanced, selectEndpoint } from './ui-helpers';
+import { test, expect } from './fixtures';
 
 test.beforeEach(async ({ page }) => {
   // Do not load public tiles in automated tests. Verify the bundled street fallback.
@@ -24,6 +25,7 @@ test('plans and changes routes, enforces zero detour, and exposes its sources', 
     'true',
   );
 
+  await openAdvanced(page);
   await page.getByLabel('Room for a detour').fill('0');
   await page.getByRole('button', { name: /Compare walking routes/ }).click();
   await expect(page.locator('.route-card')).toHaveCount(1);
@@ -78,7 +80,7 @@ test('rejects identical endpoints without leaving an old route on screen', async
   await page.goto('/?area=chicago-loop');
   await expect(page.locator('.route-card').first()).toBeVisible();
   const origin = await page.locator('#origin').inputValue();
-  await page.locator('#destination').selectOption(origin);
+  await selectEndpoint(page, 'destination', origin);
   await page.getByRole('button', { name: /Compare walking routes/ }).click();
   await expect(page.getByRole('alert')).toContainText('same street node');
   await expect(page.locator('.route-card')).toHaveCount(0);

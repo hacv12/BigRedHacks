@@ -43,74 +43,77 @@ export default function WalkDetails({
       <div className="walk-details-title">
         <div>
           <span className="eyebrow">YOUR SELECTED WALK</span>
-          <h3>A little more context.</h3>
+          <h3>Selected route</h3>
         </div>
         <button className="quiet-button" onClick={showMap}>
           <Map size={15} /> View map
         </button>
       </div>
-      <details className="street-sequence">
-        <summary>
-          <Route size={17} />
-          <span>Street sequence</span>
-          <small>{route.segments.length} segments</small>
-        </summary>
-        <p>
-          Follow the street order below. This is a planning reference;
-          crossings, access and turn instructions are not verified.
-        </p>
-        <ol tabIndex={0} aria-label="Street sequence segments">
-          {route.segments.map((segment, index) => (
-            <li key={index}>
-              <span>{segment.name || 'Unnamed walking path'}</span>
-              <small>
-                {Math.round(segment.meters)} m · {segment.minutes.toFixed(1)}{' '}
-                min
-              </small>
-            </li>
-          ))}
-        </ol>
-      </details>
-      <div className="time-insight">
-        <h3>Same walk, different windows</h3>
-        <p>The historical index along this exact path.</p>
-        <table className="time-profile">
-          <caption className="sr-only">
-            Historical exposure in index-minutes. Selected window:{' '}
-            {manifest.timeBuckets[bucket]}.
-          </caption>
-          <thead className="sr-only">
-            <tr>
-              <th scope="col">Local time window</th>
-              <th scope="col">Relative index</th>
-              <th scope="col">Index-minutes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {manifest.timeBuckets.map((label, index) => (
-              <tr key={label} data-selected={index === bucket}>
-                <th scope="row">{label}</th>
-                <td>
-                  <span className="profile-track" aria-hidden="true">
-                    <i
-                      style={{
-                        width: `${Math.max(0, Math.min(100, (route.exposureByBucket[index] / route.minutes) * 100))}%`,
-                      }}
-                    />
-                  </span>
-                </td>
-                <td>
-                  <output>{route.exposureByBucket[index].toFixed(2)}</output>
-                </td>
-              </tr>
+      <details className="walk-more">
+        <summary>Route details</summary>
+        <details className="street-sequence">
+          <summary>
+            <Route size={17} />
+            <span>Street sequence</span>
+            <small>{route.segments.length} segments</small>
+          </summary>
+          <p>
+            Follow the street order below. This is a planning reference;
+            crossings, access and turn instructions are not verified.
+          </p>
+          <ol tabIndex={0} aria-label="Street sequence segments">
+            {route.segments.map((segment, index) => (
+              <li key={index}>
+                <span>{segment.name || 'Unnamed walking path'}</span>
+                <small>
+                  {Math.round(segment.meters)} m · {segment.minutes.toFixed(1)}{' '}
+                  min
+                </small>
+              </li>
             ))}
-          </tbody>
-        </table>
-        <p className="insight-note">
-          Index-minutes · {manifest.timezone}. Geometry stays fixed; this is
-          historical context, not a forecast.
-        </p>
-      </div>
+          </ol>
+        </details>
+        <div className="time-insight">
+          <h3>Same walk, different windows</h3>
+          <p>The historical index along this exact path.</p>
+          <table className="time-profile">
+            <caption className="sr-only">
+              Historical exposure in index-minutes. Selected window:{' '}
+              {manifest.timeBuckets[bucket]}.
+            </caption>
+            <thead className="sr-only">
+              <tr>
+                <th scope="col">Local time window</th>
+                <th scope="col">Relative index</th>
+                <th scope="col">Index-minutes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {manifest.timeBuckets.map((label, index) => (
+                <tr key={label} data-selected={index === bucket}>
+                  <th scope="row">{label}</th>
+                  <td>
+                    <span className="profile-track" aria-hidden="true">
+                      <i
+                        style={{
+                          width: `${Math.max(0, Math.min(100, (route.exposureByBucket[index] / route.minutes) * 100))}%`,
+                        }}
+                      />
+                    </span>
+                  </td>
+                  <td>
+                    <output>{route.exposureByBucket[index].toFixed(2)}</output>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="insight-note">
+            Index-minutes · {manifest.timezone}. Geometry stays fixed; this is
+            historical context, not a forecast.
+          </p>
+        </div>
+      </details>
       <div className="trip-actions">
         <button
           className="share-button"
