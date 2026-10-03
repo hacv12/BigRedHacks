@@ -1,0 +1,56 @@
+{
+  "periodStart": "2025-01-01",
+  "periodEnd": "2025-12-31",
+  "cellSizeMeters": 250,
+  "haloMeters": 750,
+  "osmEndpoint": "https://overpass-api.de/api/interpreter",
+  "countryCode": "US",
+  "id": "fixture-city",
+  "cityId": "fixture",
+  "city": "Synthetic Test City",
+  "district": "Test rectangle",
+  "region": "New York",
+  "regionCode": "NY",
+  "timezone": "America/New_York",
+  "description": "Synthetic test only \u2014 not a real supported city",
+  "bounds": [
+    -73.992,
+    40.748,
+    -73.986,
+    40.752
+  ],
+  "gridReferenceLatitude": 40.74,
+  "defaultOriginId": "west",
+  "defaultDestinationId": "east",
+  "source": {
+    "adapter": "normalized_csv",
+    "name": "Synthetic onboarding test fixture",
+    "url": "https://example.invalid/synthetic-fixture",
+    "path": "scripts/fixtures/onboarding.csv",
+    "categories": {
+      "ROBBERY": "ROBBERY",
+      "THEFT": "THEFT"
+    },
+    "places": [
+      "STREET"
+    ]
+  },
+  "landmarks": [
+    {
+      "id": "west",
+      "name": "Synthetic west",
+      "point": [
+        -73.99,
+        40.75
+      ]
+    },
+    {
+      "id": "east",
+      "name": "Synthetic east",
+      "point": [
+        -73.989,
+        40.75
+      ]
+    }
+  ]
+}

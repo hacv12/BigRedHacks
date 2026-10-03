@@ -1,0 +1,126 @@
+{
+  "periodStart": "2025-01-01",
+  "periodEnd": "2025-12-31",
+  "cellSizeMeters": 250,
+  "haloMeters": 750,
+  "osmEndpoint": "https://overpass-api.de/api/interpreter",
+  "countryCode": "US",
+  "id": "nyc-manhattan",
+  "cityId": "nyc",
+  "city": "New York City",
+  "district": "Central Manhattan",
+  "region": "New York",
+  "regionCode": "NY",
+  "timezone": "America/New_York",
+  "description": "Central Manhattan rectangle, Battery Park through Columbus Circle; not all NYC",
+  "bounds": [
+    -74.02,
+    40.7,
+    -73.965,
+    40.78
+  ],
+  "gridReferenceLatitude": 40.74,
+  "defaultOriginId": "penn",
+  "defaultDestinationId": "grand-central",
+  "source": {
+    "adapter": "nyc_socrata",
+    "endpoint": "https://data.cityofnewyork.us/resource/qgea-i56i.json",
+    "url": "https://data.cityofnewyork.us/Public-Safety/NYPD-Complaint-Data-Historic/qgea-i56i",
+    "name": "NYPD Complaint Data Historic",
+    "categories": {
+      "105": "ROBBERY",
+      "106": "FELONY ASSAULT",
+      "344": "ASSAULT 3 & RELATED OFFENSES",
+      "109": "GRAND LARCENY FROM PERSON"
+    },
+    "places": [
+      "STREET",
+      "PARK/PLAYGROUND"
+    ],
+    "subtypes": {
+      "109": [
+        "404",
+        "406",
+        "408",
+        "414",
+        "415",
+        "417",
+        "419"
+      ]
+    }
+  },
+  "landmarks": [
+    {
+      "id": "times-square",
+      "name": "Times Square",
+      "point": [
+        -73.9855,
+        40.758
+      ]
+    },
+    {
+      "id": "penn",
+      "name": "Penn Station",
+      "point": [
+        -73.9934,
+        40.7506
+      ]
+    },
+    {
+      "id": "grand-central",
+      "name": "Grand Central Terminal",
+      "point": [
+        -73.9773,
+        40.7527
+      ]
+    },
+    {
+      "id": "bryant-park",
+      "name": "Bryant Park",
+      "point": [
+        -73.9832,
+        40.7536
+      ]
+    },
+    {
+      "id": "union-square",
+      "name": "Union Square",
+      "point": [
+        -73.9904,
+        40.7359
+      ]
+    },
+    {
+      "id": "washington-square",
+      "name": "Washington Square Park",
+      "point": [
+        -73.9973,
+        40.7308
+      ]
+    },
+    {
+      "id": "flatiron",
+      "name": "Flatiron Building",
+      "point": [
+        -73.9897,
+        40.7411
+      ]
+    },
+    {
+      "id": "columbus-circle",
+      "name": "Columbus Circle",
+      "point": [
+        -73.9819,
+        40.7681
+      ]
+    },
+    {
+      "id": "battery-park",
+      "name": "Battery Park",
+      "point": [
+        -74.0165,
+        40.7033
+      ]
+    }
+  ]
+}

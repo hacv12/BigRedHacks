@@ -1,0 +1,111 @@
+{
+  "periodStart": "2025-01-01",
+  "periodEnd": "2025-12-31",
+  "cellSizeMeters": 250,
+  "haloMeters": 750,
+  "osmEndpoint": "https://overpass-api.de/api/interpreter",
+  "countryCode": "US",
+  "id": "chicago-loop",
+  "cityId": "chicago",
+  "city": "Chicago",
+  "district": "Loop",
+  "region": "Illinois",
+  "regionCode": "IL",
+  "timezone": "America/Chicago",
+  "description": "Chicago Loop walking coverage",
+  "bounds": [
+    -87.644,
+    41.866,
+    -87.617,
+    41.891
+  ],
+  "gridReferenceLatitude": 41.88,
+  "defaultOriginId": "willis",
+  "defaultDestinationId": "river",
+  "source": {
+    "adapter": "chicago_socrata",
+    "endpoint": "https://data.cityofchicago.org/resource/ijzp-q8t2.json",
+    "url": "https://data.cityofchicago.org/Public-Safety/Crimes-2001-to-Present/ijzp-q8t2",
+    "name": "Chicago Police Department \u00b7 Crimes\u20142001 to Present",
+    "categories": {
+      "ROBBERY": "ROBBERY",
+      "THEFT": "THEFT",
+      "ASSAULT": "ASSAULT",
+      "BATTERY": "BATTERY"
+    },
+    "places": [
+      "STREET",
+      "SIDEWALK",
+      "PARK PROPERTY",
+      "LAKEFRONT / WATERFRONT / RIVERBANK",
+      "BRIDGE",
+      "CTA BUS STOP"
+    ]
+  },
+  "landmarks": [
+    {
+      "id": "union",
+      "name": "Union Station",
+      "point": [
+        -87.6405,
+        41.8787
+      ]
+    },
+    {
+      "id": "willis",
+      "name": "Willis Tower",
+      "point": [
+        -87.6359,
+        41.8789
+      ]
+    },
+    {
+      "id": "art",
+      "name": "Art Institute",
+      "point": [
+        -87.6249,
+        41.8796
+      ]
+    },
+    {
+      "id": "millennium",
+      "name": "Millennium Park",
+      "point": [
+        -87.6244,
+        41.8826
+      ]
+    },
+    {
+      "id": "library",
+      "name": "Harold Washington Library",
+      "point": [
+        -87.628,
+        41.8762
+      ]
+    },
+    {
+      "id": "daley",
+      "name": "Daley Plaza",
+      "point": [
+        -87.63,
+        41.8848
+      ]
+    },
+    {
+      "id": "river",
+      "name": "Chicago Riverwalk",
+      "point": [
+        -87.6295,
+        41.8871
+      ]
+    },
+    {
+      "id": "grant",
+      "name": "Buckingham Fountain",
+      "point": [
+        -87.6189,
+        41.8758
+      ]
+    }
+  ]
+}
