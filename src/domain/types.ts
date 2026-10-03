@@ -4,7 +4,10 @@ export type Bounds = [number, number, number, number]; // west, south, east, nor
 export type BucketIndex = 0 | 1 | 2 | 3;
 export type FourValues = [number, number, number, number];
 
-export interface StreetNode { id: string; point: LngLat }
+export interface StreetNode {
+  id: string;
+  point: LngLat;
+}
 export interface StreetEdge {
   id: string;
   from: string;
@@ -23,7 +26,11 @@ export interface IncidentCell {
   intensity: FourValues;
   total: number;
 }
-export interface Landmark { id: string; name: string; point: LngLat }
+export interface Landmark {
+  id: string;
+  name: string;
+  point: LngLat;
+}
 export interface DataManifest {
   city: string;
   district: string;
@@ -54,7 +61,12 @@ export interface CityDataset {
   cells: IncidentCell[];
   landmarks: Landmark[];
 }
-export interface RouteSegment { name: string; meters: number; minutes: number; exposure: number }
+export interface RouteSegment {
+  name: string;
+  meters: number;
+  minutes: number;
+  exposure: number;
+}
 export interface PlannedRoute {
   id: string;
   label: string;

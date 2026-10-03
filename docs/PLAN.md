@@ -1,6 +1,8 @@
 # Brisa: agreed hackathon plan
 
-Status: council decision accepted for implementation, October 2, 2026.
+Status: council decision accepted October 2, 2026; MVP implemented and validated October 3, 2026.
+
+Implementation refinement, October 3: the incident place filter includes public parks, waterfronts, bridges and bus stops as well as streets/sidewalks. The street graph includes these outdoor pedestrian spaces, so excluding their reports would create an artificial advantage. The final snapshot contains 3,064 eligible reports from 21,349 verified source records. See DATA.md for the exact allowlist and reproducible query.
 
 ## Product decision
 

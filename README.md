@@ -20,6 +20,15 @@ npm run build                    # TypeScript + production build
 npm run preview                  # serve the production build locally
 ```
 
+Browser checks exercise desktop and mobile layouts, tile failure, route changes, invalid inputs, and snapshot-load recovery:
+
+```sh
+npx playwright install chromium  # once per machine
+npm run test:e2e
+```
+
+Alternatively, use an installed Chrome with `PLAYWRIGHT_CHANNEL=chrome npm run test:e2e`. The tests run in an isolated browser profile and suppress public map-tile requests.
+
 ## What the prototype does
 
 - Plans routes along a real OpenStreetMap walking graph inside the demo boundary.
@@ -36,6 +45,7 @@ The index is **modeled exposure to nearby historical reports**, not a calibrated
 | Part | Location | Responsibility |
 | --- | --- | --- |
 | Product decisions | [docs/PLAN.md](docs/PLAN.md) | Council rounds, alternatives, model, scope and roadmap |
+| Demo walkthrough | [docs/DEMO.md](docs/DEMO.md) | A working example and honest pitch for the judges |
 | Data provenance | [docs/DATA.md](docs/DATA.md) | Source queries, filters, spatial coverage, dates and limitations |
 | Data pipeline | `scripts/build_data.py` | Fetch, validate, aggregate and publish a city snapshot |
 | Shared contracts | `src/domain/types.ts` | City graph, cells, requests and route results |

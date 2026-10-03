@@ -15,3 +15,7 @@ dist/
 coverage/
 .data-cache/
 *.tsbuildinfo
+test-results/
+playwright-report/
+__pycache__/
+*.pyc
