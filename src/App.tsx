@@ -19,6 +19,8 @@ import {
 import { createRoutePlanner } from './domain/planner-client';
 import { loadCatalog, loadDataset } from './data/loaders';
 import WalkDetails from './components/WalkDetails';
+import AppInstall from './components/AppInstall';
+import { cacheLoadedDataset } from './pwa/register';
 import RecentReports from './components/RecentReports';
 import RouteDecision from './components/RouteDecision';
 import EndpointSearch, {
@@ -26,6 +28,12 @@ import EndpointSearch, {
 } from './components/EndpointSearch';
 import { usePlaceSearch } from './data/use-place-search';
 import { GEOCODER_ATTRIBUTION } from './data/geocoding';
+import {
+  canLocate,
+  requestCurrentPosition,
+  tripEncodingBase,
+  isNativePlatform,
+} from './platform/native';
 import MapPickerControls, {
   type LocalPlace,
 } from './components/MapPickerControls';
@@ -63,6 +71,18 @@ export default function App() {
   const planner = useRef<ReturnType<typeof createRoutePlanner> | null>(null);
   const incomingTrip = useRef<SharedTrip | null>(null);
   const area = catalog?.areas.find((item) => item.id === areaId);
+  useEffect(() => {
+    if (data && area && data.manifest.datasetId === area.id)
+      void cacheLoadedDataset(area.datasetUrl, data);
+  }, [data, area]);
+  useEffect(() => {
+    const reportError = (event: Event) => {
+      const message: unknown = (event as CustomEvent).detail;
+      if (typeof message === 'string') setNotice(message);
+    };
+    window.addEventListener('brisa:platformerror', reportError);
+    return () => window.removeEventListener('brisa:platformerror', reportError);
+  }, []);
   const recent = useRecentActivity(area);
   const [activityCategory, setActivityCategory] = useState('all');
   const [selectedActivity, setSelectedActivity] = useState<string | null>(null);
@@ -275,7 +295,7 @@ export default function App() {
     invalidatePlan();
   }
   function locateEndpoint(target: 'origin' | 'destination') {
-    if (!navigator.geolocation) {
+    if (!canLocate()) {
       setError(
         'Location is unavailable in this browser. Search for a place or use the map.',
       );
@@ -284,7 +304,7 @@ export default function App() {
     const token = ++locationRequest.current;
     setLocating(target);
     setError('');
-    navigator.geolocation.getCurrentPosition(
+    requestCurrentPosition(
       (position) => {
         if (token !== locationRequest.current) return;
         setLocating(null);
@@ -852,6 +872,46 @@ export default function App() {
     else dialogRef.current?.close();
   }, [details]);
   useEffect(() => {
+    if (!isNativePlatform()) return;
+    let disposed = false;
+    let remove: (() => Promise<void>) | undefined;
+    void import('@capacitor/app').then(async ({ App: NativeApp }) => {
+      if (disposed) return;
+      const listener = await NativeApp.addListener('backButton', () => {
+        if (details) {
+          setDetails(false);
+        } else if (picking) {
+          setPicking(null);
+          mapReference.current = null;
+          returnToForm(picking);
+        } else {
+          const focused = document.activeElement;
+          if (
+            focused?.matches('input[role="combobox"][aria-expanded="true"]')
+          ) {
+            focused.dispatchEvent(
+              new KeyboardEvent('keydown', {
+                key: 'Escape',
+                bubbles: true,
+                cancelable: true,
+              }),
+            );
+          } else if (window.scrollY > 0) {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          } else {
+            void NativeApp.minimizeApp();
+          }
+        }
+      });
+      if (disposed) await listener.remove();
+      else remove = () => listener.remove();
+    });
+    return () => {
+      disposed = true;
+      void remove?.();
+    };
+  }, [details, picking]);
+  useEffect(() => {
     if (picking) {
       revealMap();
       mapEl.current?.focus({ preventScroll: true });
@@ -1052,6 +1112,7 @@ export default function App() {
                     </span>
                   </summary>
                   <div className="advanced-content">
+                    <AppInstall />
                     <div className="planner-actions">
                       <span>Restore the sample route</span>
                       <button
@@ -1462,7 +1523,7 @@ export default function App() {
                     budget={budget}
                     showMap={showRouteMap}
                     createShareUrl={() =>
-                      encodeTripUrl(window.location.href, {
+                      encodeTripUrl(tripEncodingBase(window.location.href), {
                         areaId: area.id,
                         cityId: area.cityId,
                         request: {

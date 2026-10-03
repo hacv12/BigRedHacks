@@ -1,0 +1,29 @@
+.app-install {
+  color: #183d39;
+  font-size: 12px;
+  line-height: 1.5;
+  margin-top: 12px;
+}
+.app-install summary {
+  cursor: pointer;
+  min-height: 44px;
+  padding: 10px 0;
+  font-weight: 600;
+}
+.app-install p {
+  margin: 8px 0;
+}
+.app-install button {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid #78918b;
+  border-radius: 4px;
+  color: #183d39;
+  background: white;
+  font: inherit;
+  cursor: pointer;
+}
+.app-install :focus-visible {
+  outline: 3px solid #116e5e;
+  outline-offset: 2px;
+}
