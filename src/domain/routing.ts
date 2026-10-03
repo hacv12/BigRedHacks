@@ -2,6 +2,8 @@ import type {
   Bounds,
   CityDataset,
   LngLat,
+  IncidentCell,
+  FourValues,
   PlanRequest,
   PlannedRoute,
   RouteComparison,
@@ -40,61 +42,131 @@ interface Arc {
   exposure: number;
 }
 type Graph = Map<string, Arc[]>;
-const cache = new WeakMap<CityDataset, Map<number, Graph>>();
-function graphFor(data: CityDataset, bucket: number): Graph {
-  let buckets = cache.get(data);
-  if (!buckets) {
-    buckets = new Map();
-    cache.set(data, buckets);
-  }
-  const cached = buckets.get(bucket);
-  if (cached) return cached;
-  const graph: Graph = new Map(data.nodes.map((n) => [n.id, []]));
-  for (const edge of data.edges) {
-    if (
-      !graph.has(edge.from) ||
-      !graph.has(edge.to) ||
-      edge.coordinates.length < 2 ||
-      edge.coordinates.some(
-        (point) =>
-          !point.every(Number.isFinite) ||
-          !inside(point, data.manifest.planningBounds),
-      )
-    )
-      continue;
-    let meters = 0,
-      exposure = 0,
-      supported = true;
-    for (let i = 1; i < edge.coordinates.length; i++) {
-      const a = edge.coordinates[i - 1],
-        b = edge.coordinates[i];
-      const length = haversine(a, b),
-        count = Math.max(1, Math.ceil(length / 25));
-      if (!Number.isFinite(length)) {
-        supported = false;
+// Spatial bins retain original cell order, including inclusive shared boundaries.
+// Oversized irregular cells stay in a separate list to bound index memory.
+function cellLookup(cells: IncidentCell[]) {
+  const valid = cells.filter(
+    (c) =>
+      c.bounds.every(Number.isFinite) &&
+      c.bounds[2] > c.bounds[0] &&
+      c.bounds[3] > c.bounds[1],
+  );
+  const median = (values: number[]) =>
+    values.sort((a, b) => a - b)[Math.floor(values.length / 2)] || 1;
+  const width = median(valid.map((c) => c.bounds[2] - c.bounds[0]));
+  const height = median(valid.map((c) => c.bounds[3] - c.bounds[1]));
+  const bins = new Map<string, number[]>(),
+    large: number[] = [];
+  cells.forEach((cell, index) => {
+    const [w, s, e, n] = cell.bounds;
+    if (!cell.bounds.every(Number.isFinite) || e < w || n < s) return;
+    const x0 = Math.floor(w / width),
+      x1 = Math.floor(e / width);
+    const y0 = Math.floor(s / height),
+      y1 = Math.floor(n / height);
+    if ((x1 - x0 + 1) * (y1 - y0 + 1) > 64) {
+      large.push(index);
+      return;
+    }
+    for (let x = x0; x <= x1; x++)
+      for (let y = y0; y <= y1; y++) {
+        const key = `${x},${y}`,
+          bin = bins.get(key);
+        if (bin) bin.push(index);
+        else bins.set(key, [index]);
+      }
+  });
+  return (point: LngLat) => {
+    const local =
+      bins.get(
+        `${Math.floor(point[0] / width)},${Math.floor(point[1] / height)}`,
+      ) ?? [];
+    let first = Infinity;
+    for (const index of local)
+      if (inside(point, cells[index].bounds)) {
+        first = index;
         break;
       }
-      meters += length;
-      for (let j = 0; j < count; j++) {
-        const t = (j + 0.5) / count;
-        const p: LngLat = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
-        const value = data.cells.find((cell) => inside(p, cell.bounds))
-          ?.intensity[bucket];
-        if (
-          value === undefined ||
-          !Number.isFinite(value) ||
-          value < 0 ||
-          value > 1
-        ) {
-          supported = false;
+    for (const index of large) {
+      if (index >= first) break;
+      if (inside(point, cells[index].bounds)) {
+        first = index;
+        break;
+      }
+    }
+    return cells[first];
+  };
+}
+interface MeasuredEdge {
+  edge: StreetEdge;
+  meters: number;
+  exposures: FourValues;
+}
+interface PreparedGraph {
+  edges: MeasuredEdge[];
+  bucket?: number;
+  graph?: Graph;
+}
+const cache = new WeakMap<CityDataset, PreparedGraph>();
+function graphFor(data: CityDataset, bucket: number): Graph {
+  let prepared = cache.get(data);
+  if (!prepared) {
+    const lookup = cellLookup(data.cells),
+      nodes = new Set(data.nodes.map((n) => n.id));
+    const edges: MeasuredEdge[] = [];
+    for (const edge of data.edges) {
+      if (
+        !nodes.has(edge.from) ||
+        !nodes.has(edge.to) ||
+        edge.coordinates.length < 2 ||
+        edge.coordinates.some(
+          (point) =>
+            !point.every(Number.isFinite) ||
+            !inside(point, data.manifest.planningBounds),
+        )
+      )
+        continue;
+      let meters = 0;
+      const exposures: FourValues = [0, 0, 0, 0];
+      for (let i = 1; i < edge.coordinates.length; i++) {
+        const a = edge.coordinates[i - 1],
+          b = edge.coordinates[i];
+        const length = haversine(a, b),
+          count = Math.max(1, Math.ceil(length / 25));
+        if (!Number.isFinite(length)) {
+          exposures.fill(NaN);
           break;
         }
-        exposure += (length / count / 81) * value;
+        meters += length;
+        for (let j = 0; j < count; j++) {
+          const t = (j + 0.5) / count;
+          const cell = lookup([
+            a[0] + (b[0] - a[0]) * t,
+            a[1] + (b[1] - a[1]) * t,
+          ]);
+          for (let k = 0; k < 4; k++) {
+            const value = cell?.intensity[k];
+            exposures[k] +=
+              value !== undefined &&
+              Number.isFinite(value) &&
+              value >= 0 &&
+              value <= 1
+                ? (length / count / 81) * value
+                : NaN;
+          }
+        }
       }
-      if (!supported) break;
+      if (meters > 0) edges.push({ edge, meters, exposures });
     }
-    // Unsupported coverage removes an edge; it must never become a zero-cost corridor.
-    if (!supported || meters <= 0) continue;
+    prepared = { edges };
+    cache.set(data, prepared);
+  }
+  if (prepared.bucket === bucket && prepared.graph) return prepared.graph;
+  const graph: Graph = new Map(data.nodes.map((n) => [n.id, []]));
+  for (const { edge, meters, exposures } of prepared.edges) {
+    const exposure = exposures[bucket];
+    // Unknown scoring removes the edge; it never becomes a zero-cost corridor.
+    if (!Number.isFinite(exposure)) continue;
     const arc = {
       edge,
       to: edge.to,
@@ -107,7 +179,9 @@ function graphFor(data: CityDataset, bucket: number): Graph {
     if (edge.bidirectional)
       graph.get(edge.to)!.push({ ...arc, to: edge.from, reverse: true });
   }
-  buckets.set(bucket, graph);
+  // Geometry and all four scores are cached once; only one adjacency copy is retained.
+  prepared.bucket = bucket;
+  prepared.graph = graph;
   return graph;
 }
 class Heap {

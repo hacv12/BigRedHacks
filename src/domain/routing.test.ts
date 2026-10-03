@@ -201,3 +201,38 @@ describe('graph walking routes', () => {
     },
   );
 });
+
+describe('dataset-isolated spatial sampling', () => {
+  it('keeps matching node and edge IDs isolated across datasets', () => {
+    const first = fixture(),
+      second = fixture();
+    second.cells.forEach((cell) => {
+      cell.intensity = [0.25, 0.25, 0.25, 0.25];
+    });
+    expect(planRoutes(first, request).routes[0].exposure).toBeCloseTo(
+      haversine(a, b) / 81,
+    );
+    expect(planRoutes(second, request).routes[0].exposure).toBeCloseTo(
+      haversine(a, b) / 81 / 4,
+    );
+    expect(planRoutes(first, request).routes[0].exposure).toBeCloseTo(
+      haversine(a, b) / 81,
+    );
+  });
+  it('preserves original-cell precedence exactly on inclusive shared boundaries', () => {
+    const data = fixture();
+    data.edges = [data.edges[0]];
+    data.cells[0].bounds = [-0.01, -0.01, 0.01, 0];
+    data.cells[1].bounds = [-0.01, 0, 0.01, 0.01];
+    expect(planRoutes(data, request).routes[0].exposure).toBeCloseTo(
+      haversine(a, b) / 81,
+    );
+  });
+  it('does not fill gaps between irregular cells', () => {
+    const data = fixture();
+    data.edges = [data.edges[0]];
+    data.cells[0].bounds = [-0.01, -0.01, 0.0005, 0.01];
+    data.cells[1].bounds = [0.0015, -0.01, 0.01, 0.01];
+    errorCode(() => planRoutes(data, request), 'DISCONNECTED');
+  });
+});
