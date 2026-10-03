@@ -62,7 +62,7 @@ São Paulo's MASP landmark is named **MASP · Paulista sidewalk**. Its reviewed 
 - If dependencies are already installed, `npm run build` followed by `npm run preview` serves the production bundle locally. Open the URL that command prints. The historical route demo needs no incident API or Google key; turn latest activity OFF without network access and use bundled places or map selection.
 - Do not refresh source data at the event. The committed packages are the demo inputs; ingestion is a separate operation.
 - If a package load fails, use Try again or switch coverage. Invalid shared links show a notice and fall back to default landmarks. Identical endpoints and points outside supported street coverage produce recoverable errors.
-- The app is not a service-worker offline install. A remote deployment must load its assets and selected package first; a prepared local server is the dependable network fallback.
+- The installed web app can reopen its cached shell and saved city packages; confirm the offline status in Advanced options before the demo. Native phone builds bundle all four packages. Tiles, address search and recent activity still need internet. See [phone app setup](APP.md); a prepared local server is also a dependable network fallback.
 
 ## What is implemented and checked
 

@@ -6,6 +6,8 @@ A BigRedHacks navigation project: compare walking routes using historical report
 
 [See the mobile layout](docs/screenshots/navigation-mobile.jpg).
 
+**Phone app:** Android APK builds, an iOS Xcode project and a home-screen web app are available. See **[installing and building the app](docs/APP.md)** and the **[phone build artifacts](https://github.com/hacv12/BigRedHacks/actions/workflows/mobile.yml)**.
+
 **Included coverage:** four bounded packages. Coverage is regional; a city label does not imply every neighborhood is supported.
 
 | City | Coverage | Historical scope |
@@ -95,6 +97,7 @@ flowchart LR
 | Demo walkthrough | [docs/DEMO.md](docs/DEMO.md) | Two-minute demo and local fallback |
 | Pitch kit | [docs/PITCH.md](docs/PITCH.md) | Spoken pitch and factual submission draft |
 | Manual deployment | [docs/DEPLOY.md](docs/DEPLOY.md) | Publication instructions; not a claim of a live deployment |
+| Phone apps | [docs/APP.md](docs/APP.md) | Android installation, iOS builds, native sharing and browser installation |
 | Address search | [docs/PLACE_SEARCH.md](docs/PLACE_SEARCH.md) | Bounded geocoding, local fallback, provider configuration and query disclosure |
 | Navigation refinement | [docs/NAVIGATION_REFINEMENT.md](docs/NAVIGATION_REFINEMENT.md) | User-perspective reviews and the simpler mobile/desktop flow |
 | Latest activity | [docs/LIVE_ACTIVITY.md](docs/LIVE_ACTIVITY.md), [docs/RECENT_SOURCES.md](docs/RECENT_SOURCES.md) | Optional feeds, delays, bubble semantics and failure behavior |
@@ -116,7 +119,7 @@ Committed packages make historical routing independent of incident-source and Ov
 
 After changing data, run Python validation, `npm test`, and `npm run build`. Deploy the resulting `dist/` as one release so the catalog and its data packages stay consistent. Root hosting is the default; [GitHub Pages instructions](docs/DEPLOY.md) cover project paths through `BASE_PATH`. GitHub Actions checks packages, algorithms, workers, production build and browser flows, including automated accessibility checks.
 
-All `VITE_` values are public browser configuration. `.env.example` documents optional tile and Photon-compatible geocoder URLs; never put private credentials there. Follow the selected tile provider's attribution and usage rules. There is no bulk tile downloader or service worker.
+All `VITE_` values are public browser configuration. `.env.example` documents optional tile and Photon-compatible geocoder URLs and the native app's public sharing URL; never put private credentials there. Follow the selected tile provider's attribution and usage rules. The production web app caches its shell and opened city packages through a versioned service worker; tiles, address searches and activity feeds are excluded. Native apps bundle the packages and disable the service worker. There is no bulk tile downloader.
 
 ## Attribution
 

@@ -1,0 +1,80 @@
+name: Build phone apps
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'scripts/**'
+      - 'android/**'
+      - 'ios/**'
+      - '*config*'
+      - 'package*.json'
+      - '.github/workflows/mobile.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+          cache-dependency-path: |
+            android/**/*.gradle
+            android/gradle/wrapper/gradle-wrapper.properties
+      - run: npm ci
+      - run: npm run build:native
+      - run: npx cap sync android
+      - name: Build installable debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v7
+        with:
+          name: brisa-android-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: Select Xcode 26
+        run: sudo xcode-select --switch /Applications/Xcode_26.3.app/Contents/Developer
+      - run: npm ci
+      - run: npm run build:native
+      - run: npx cap sync ios
+      - name: Compile iOS Simulator app without signing credentials
+        run: >-
+          xcodebuild -project ios/App/App.xcodeproj -scheme App
+          -configuration Debug -sdk iphonesimulator
+          -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath ios/DerivedData
+          CODE_SIGNING_ALLOWED=NO build
+      - name: Package simulator app
+        run: |
+          mkdir -p artifacts
+          ditto -c -k --keepParent ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app artifacts/Brisa-iOS-Simulator.zip
+      - uses: actions/upload-artifact@v7
+        with:
+          name: brisa-ios-simulator
+          path: artifacts/Brisa-iOS-Simulator.zip
+          if-no-files-found: error
+          retention-days: 30
