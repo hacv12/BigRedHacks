@@ -374,7 +374,7 @@ async function readJson(
 export async function loadCatalog(signal?: AbortSignal): Promise<CityCatalog> {
   return validateCatalog(
     await readJson(
-      '/data/catalog.json',
+      `${import.meta.env.BASE_URL}data/catalog.json`,
       'Unable to load the city catalog. Please retry.',
       signal,
     ),
@@ -386,7 +386,7 @@ export async function loadDataset(
 ): Promise<CityDataset> {
   return validateDataset(
     await readJson(
-      area.datasetUrl,
+      `${import.meta.env.BASE_URL}${area.datasetUrl.slice(1)}`,
       `Unable to load the ${area.city} · ${area.region} snapshot. Try another area or retry.`,
       signal,
     ),

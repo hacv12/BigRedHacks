@@ -98,7 +98,10 @@ function dataset(): CityDataset {
     ],
   };
 }
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+});
 describe('coverage catalog and package validation', () => {
   it('accepts a complete package with zero observed reports', () => {
     expect(validateCatalog(catalog()).defaultAreaId).toBe(area.id);
@@ -189,6 +192,28 @@ describe('coverage catalog and package validation', () => {
       validateDataset(bad, { ...area, bounds: bad.manifest.planningBounds }),
     ).toThrow('incomplete');
   });
+  it.each(['/', '/BigRedHacks/'])(
+    'fetches catalog and snapshots beneath the configured %s base',
+    async (base) => {
+      vi.stubEnv('BASE_URL', base);
+      const fetcher = vi
+        .fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify(catalog())))
+        .mockResolvedValueOnce(new Response(JSON.stringify(dataset())));
+      vi.stubGlobal('fetch', fetcher);
+      const controller = new AbortController();
+      await expect(loadCatalog(controller.signal)).resolves.toEqual(catalog());
+      await expect(loadDataset(area, controller.signal)).resolves.toEqual(
+        dataset(),
+      );
+      expect(fetcher).toHaveBeenNthCalledWith(1, `${base}data/catalog.json`, {
+        signal: controller.signal,
+      });
+      expect(fetcher).toHaveBeenNthCalledWith(2, `${base}data/test-city.json`, {
+        signal: controller.signal,
+      });
+    },
+  );
   it('surfaces network/JSON errors and can retry after failure', async () => {
     vi.stubGlobal(
       'fetch',

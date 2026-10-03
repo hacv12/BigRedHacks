@@ -1,0 +1,55 @@
+name: Publish Brisa to GitHub Pages
+
+# Publishing is explicitly manual. Pushes and pull requests never deploy.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: Read Pages configuration
+        id: pages
+        uses: actions/configure-pages@v6
+      - run: npm ci
+      - run: npm test
+      - run: python3 scripts/test_data.py
+      - name: Build for the configured Pages path
+        run: npm run build
+        env:
+          BASE_PATH: ${{ steps.pages.outputs.base_path }}/
+      - name: Upload the complete static site
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy reviewed artifact
+        id: deployment
+        uses: actions/deploy-pages@v5
