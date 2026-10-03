@@ -3,6 +3,7 @@
 import collections, copy, datetime, json, math, pathlib, tempfile, unittest
 from unittest.mock import patch
 import build_data as build
+import ssp_sp
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 
 class SnapshotTests(unittest.TestCase):
@@ -13,7 +14,7 @@ class SnapshotTests(unittest.TestCase):
     def test_catalog_and_packages(self):
         self.assertEqual(self.catalog['version'],1)
         self.assertEqual(self.catalog['defaultAreaId'],'nyc-manhattan')
-        self.assertEqual({a['cityId'] for a in self.catalog['areas']},{'nyc','chicago','sf'})
+        self.assertEqual({a['cityId'] for a in self.catalog['areas']},{'nyc','chicago','sf','sao-paulo'})
         for area,data in zip(self.catalog['areas'],self.datasets):
             with self.subTest(area=area['id']):
                 build.validate_snapshot(data);m=data['manifest']
@@ -93,6 +94,18 @@ class IngestionTests(unittest.TestCase):
             data=build.build(self.config,pathlib.Path(directory));build.validate_snapshot(data)
             self.assertEqual(data['manifest']['eligibleReportCount'],2)
             self.assertEqual(data['manifest']['sourceAdapter'],'normalized_csv')
+    def test_reviewed_landmark_node_prevents_wrong_grade_snap(self):
+        config=copy.deepcopy(self.config)
+        config['landmarks'][0]['osmNodeId']='2'
+        surface=[-73.9895,40.750]
+        osm={'osm3s':{'timestamp_osm_base':'2026-01-01T00:00:00Z'},'elements':[{'type':'way','id':1,'nodes':[1,2],'geometry':[{'lon':-73.990,'lat':40.750},{'lon':surface[0],'lat':surface[1]}],'tags':{'highway':'footway','name':'Synthetic fixture path'}}]}
+        with tempfile.TemporaryDirectory() as directory,patch.object(build,'load_osm',return_value=osm):
+            data=build.build(config,pathlib.Path(directory))
+            self.assertEqual(data['landmarks'][0]['point'],surface)
+            config['landmarks'][0]['osmNodeId']='999'
+            with self.assertRaisesRegex(ValueError,'reviewed OSM access node missing'):
+                build.build(config,pathlib.Path(directory))
+
     def test_local_timestamp_validation(self):
         for bad in ['2025-02-30T03:00:00','2025-01-01T24:00:00','2025-01-01','2025-01-01T12:00:00Z','2025-03-09T02:30:00']:
             with self.subTest(value=bad),self.assertRaises(ValueError):build.parse_local(bad,'America/New_York')
@@ -122,6 +135,39 @@ class IngestionTests(unittest.TestCase):
         query=build.source_query(config,grid)
         self.assertEqual(query['key'],'row_id')
         self.assertIn('incident_datetime',query['where']);self.assertIn('within_box(point,',query['where'])
+
+    def test_ssp_exact_time_and_publisher_version_deduplication(self):
+        base={'NOME_DELEGACIA':'SYNTHETIC TEST','ANO_BO':'2025','NUM_BO':'test-1','VERSAO':'1',
+              'DATA_OCORRENCIA_BO':'45658','HORA_OCORRENCIA':'0.5','DESCR_PERIODO':'',
+              'DESCR_TIPOLOCAL':'Via Pública','DESCR_SUBTIPOLOCAL':'Via Pública',
+              'LONGITUDE':'-46.65','LATITUDE':'-23.56','CIDADE':'S.PAULO',
+              'RUBRICA':'Roubo (art. 157)','DESCR_CONDUTA':'Transeunte'}
+        bounds=[-46.67,-23.58,-46.63,-23.54]
+        def consolidate(rows):
+            return ssp_sp.consolidate(rows,bounds,{'Roubo (art. 157)':'ROBBERY'},['Transeunte'])
+        rows,audit=consolidate([base,base,{**base,'VERSAO':'2','HORA_OCORRENCIA':'0.75'}])
+        self.assertEqual(audit['rawWorksheetRows'],3);self.assertEqual(audit['uniquePublisherReports'],1)
+        self.assertEqual(len(rows),1);self.assertEqual(rows[0]['time'],'2025-01-01T18:00:00')
+        self.assertIsNone(rows[0]['sourceExclusion'])
+        # A later report version outside coverage cannot leave its former point behind.
+        rows,audit=consolidate([base,{**base,'VERSAO':'2','LONGITUDE':'-47'}])
+        self.assertEqual(rows,[]);self.assertEqual(audit['reportsOutsideHaloOrUnlocated'],1)
+        for change,reason in [({'HORA_OCORRENCIA':'NULL'},'missing or imprecise occurrence timestamp'),
+                              ({'DESCR_PERIODO':'A tarde'},'missing or imprecise occurrence timestamp'),
+                              ({'CIDADE':'OTHER'},'source city disagrees with coordinates')]:
+            rows,_=consolidate([{**base,**change}]);self.assertEqual(rows[0]['sourceExclusion'],reason)
+        rows,_=consolidate([base,{**base,'HORA_OCORRENCIA':'0.75'}])
+        self.assertEqual(rows[0]['sourceExclusion'],'conflicting latest-version occurrence fields')
+        rows,_=consolidate([{**base,'DESCR_CONDUTA':'Interior de Veículo'}])
+        self.assertIsNone(rows[0]['category'])
+        for change in [{'NUM_BO':''},{'VERSAO':''}]:
+            with self.assertRaises(ValueError):consolidate([{**base,**change}])
+
+    def test_ssp_excel_time_rejects_unknown_and_preserves_true_midnight(self):
+        self.assertEqual(ssp_sp.excel_occurrence('45658','0',''),'2025-01-01T00:00:00')
+        self.assertEqual(ssp_sp.excel_occurrence('45658','0.77083333333333337',''),'2025-01-01T18:30:00')
+        for day,hour,period in [('45658','',''),('45658','NULL',''),('45658','0','Em hora incerta'),('45658','1',''),('45658','nan',''),('45658.5','.5','')]:
+            with self.assertRaises(ValueError):ssp_sp.excel_occurrence(day,hour,period)
 
     def test_complete_source_count_and_unique_ids(self):
         build.assert_complete([{'id':'1'},{'id':'2'}],2,'id')

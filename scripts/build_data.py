@@ -8,7 +8,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 BOUNDS = [-87.644, 41.866, -87.617, 41.891]  # legacy graph() default only
 BUCKETS = ['Midnight–6 am', '6 am–noon', 'Noon–6 pm', '6 pm–midnight']
 MODEL = 'brisa-250m-shrink20-cross-v2'
-ADAPTERS = {'chicago_socrata', 'nyc_socrata', 'sf_socrata', 'normalized_csv'}
+ADAPTERS = {'chicago_socrata', 'nyc_socrata', 'sf_socrata', 'ssp_sp_xlsx', 'normalized_csv'}
 
 def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
@@ -71,6 +71,7 @@ def load_config(path):
     if any(not isinstance(k,str) or not isinstance(v,str) or not k or not v for k,v in source['categories'].items()) or any(not isinstance(v,str) or not v for v in source['places']): raise ValueError('Category and place allowlists must contain nonempty strings')
     if source.get('adapter') not in ADAPTERS: raise ValueError('Unsupported source adapter')
     if not source.get('name') or not source.get('url') or not source.get('categories') or not source.get('places'): raise ValueError('Source provenance and explicit category/place allowlists required')
+    if source['adapter']=='ssp_sp_xlsx' and (not source.get('worksheet') or not source.get('conductAllowlist') or not source.get('subplaces')): raise ValueError('SSP-SP requires worksheet, conduct allowlist and place subtypes')
     if source['adapter']=='normalized_csv' and not source.get('path'): raise ValueError('CSV source path required')
     if source['adapter']!='normalized_csv' and not source.get('endpoint'): raise ValueError('Socrata endpoint required')
     ids=[p['id'] for p in config['landmarks']]
@@ -116,6 +117,8 @@ def assert_complete(rows, expected, key):
 
 def load_source(config, grid, cache, refresh=False):
     source=config['source']; adapter=source['adapter']
+    if adapter=='ssp_sp_xlsx':
+        return load_ssp_source(config,grid,cache,refresh)
     if adapter=='normalized_csv':
         path=pathlib.Path(source['path']);path=path if path.is_absolute() else ROOT/path
         content=path.read_bytes(); rows=list(csv.DictReader(io.StringIO(content.decode('utf-8-sig'))))
@@ -159,6 +162,41 @@ def load_source(config, grid, cache, refresh=False):
     atomic_json(target,result)
     return result
 
+def load_ssp_source(config, grid, cache, refresh=False):
+    import ssp_sp
+    source=config['source']
+    identity={'source':source,'configHash':digest(config),'adapterVersion':1}
+    target=cache/('source-'+digest(identity)+'.json')
+    if target.exists() and not refresh:
+        result=json.loads(target.read_text())
+        if result.get('identity')!=identity: raise ValueError('SSP-SP source cache provenance mismatch')
+        assert_complete(result['rows'],result['expected'],'id')
+        return result
+    raw=cache/('ssp-workbook-'+digest(source['endpoint'])+'.xlsx')
+    metadata=raw.with_suffix('.json')
+    with tempfile.TemporaryDirectory(prefix='ssp-stage-',dir=cache) as staging:
+        staged=pathlib.Path(staging)/'source.xlsx'
+        if raw.exists() and metadata.exists() and not refresh:
+            provenance=json.loads(metadata.read_text())
+            if provenance.get('endpoint')!=source['endpoint']: raise ValueError('SSP-SP workbook URL mismatch')
+            input_path=raw
+        else:
+            print(f"{config['id']}: downloading complete official SSP-SP workbook",flush=True)
+            subprocess.run(['curl','--location','--fail','--show-error','--silent','--retry','2','--max-time','240',source['endpoint'],'-o',str(staged)],check=True)
+            input_path=staged
+            provenance={'endpoint':source['endpoint'],'downloadedAt':datetime.datetime.now(datetime.timezone.utc).isoformat()}
+        print(f"{config['id']}: validating worksheet rows and consolidating publisher report IDs",flush=True)
+        rows,audit=ssp_sp.read_source(input_path,config,grid.halo)
+        if provenance.get('sha256') and provenance['sha256']!=audit['workbookSha256']: raise ValueError('SSP-SP workbook checksum mismatch')
+        query={**audit,'endpoint':source['endpoint'],'workbookBytes':input_path.stat().st_size,'halo':grid.halo}
+        result={'identity':identity,'query':query,'queryHash':digest(query),'configHash':digest(config),'rows':rows,'expected':len(rows),'downloadedAt':provenance['downloadedAt']}
+        assert_complete(rows,len(rows),'id')
+        if input_path==staged:
+            staged.replace(raw)
+            atomic_json(metadata,{**provenance,'sha256':audit['workbookSha256']})
+    atomic_json(target,result)
+    return result
+
 def parse_local(value, timezone):
     """Require a complete local naive timestamp; reject impossible civil times."""
     if not isinstance(value,str) or not re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?',value): raise ValueError('Malformed local occurrence timestamp')
@@ -173,6 +211,8 @@ def normalize_record(row, config):
     adapter=config['source']['adapter']
     if adapter=='chicago_socrata':
         return {'id':row.get('id'),'time':row.get('date'),'category':row.get('primary_type'),'place':row.get('location_description'),'point':[row.get('longitude'),row.get('latitude')],'domestic':row.get('domestic')}
+    if adapter=='ssp_sp_xlsx':
+        return row
     if adapter=='sf_socrata':
         # The source has no premises column. Only explicitly place-coded offenses qualify.
         code=str(row.get('incident_code',''))
@@ -196,6 +236,7 @@ def aggregate(rows, config, grid):
         if not valid_point(r['point']): exclusions['invalid coordinates']+=1;continue
         point=list(map(float,r['point'])); index=grid.index(point)
         if index is None: exclusions['outside incident halo']+=1;continue
+        if r.get('sourceExclusion'): exclusions[r['sourceExclusion']]+=1;continue
         if r['category'] not in source['categories']: exclusions['other category']+=1;continue
         subtypes=source.get('subtypes',{}).get(r['category'])
         if subtypes is not None and r.get('subtype') not in subtypes: exclusions['other offense subtype']+=1;continue
@@ -204,6 +245,7 @@ def aggregate(rows, config, grid):
             if r.get('reportType')!='II': exclusions['non-initial report']+=1;continue
             if not str(r.get('reportId') or '').strip(): exclusions['missing incident report ID']+=1;continue
         if r['place'] not in source['places']: exclusions['other or missing place']+=1;continue
+        if adapter=='ssp_sp_xlsx' and r.get('subplace') not in source['subplaces']: exclusions['other or missing place subtype']+=1;continue
         try:
             dt=parse_local(r['time'],config['timezone'])
             if not start<=dt.date()<=end: exclusions['outside occurrence period']+=1;continue
@@ -328,9 +370,15 @@ def build(config, cache, refresh=False, osm_file=None):
     nodes,edges,graph_exclusions,components=graph(osm,config['bounds'])
     landmarks=[];snaps=[]
     for landmark in config['landmarks']:
-        point=min(nodes,key=lambda n:distance(n['point'],landmark['point']))['point'];d=distance(point,landmark['point'])
+        if landmark.get('osmNodeId'):
+            pinned=next((n for n in nodes if n['id']==str(landmark['osmNodeId'])),None)
+            if pinned is None: raise ValueError(f"{landmark['name']} reviewed OSM access node missing from walking graph")
+            point=pinned['point']
+        else:
+            point=min(nodes,key=lambda n:distance(n['point'],landmark['point']))['point']
+        d=distance(point,landmark['point'])
         if d>75: raise ValueError(f"{landmark['name']} landmark snap too far: {d:.1f}m")
-        landmarks.append({**landmark,'point':point});snaps.append(f"{landmark['name']}: {d:.1f}m")
+        landmarks.append({'id':landmark['id'],'name':landmark['name'],'point':point});snaps.append(f"{landmark['name']}: {d:.1f}m"+(f" (reviewed OSM node {landmark['osmNodeId']})" if landmark.get('osmNodeId') else ''))
     adapter=config['source']['adapter'];eligible=sum(c['total'] for c in cells)
     notes=[
         'Historical reported activity, not a probability of harm. Zero reports does not mean safe.',
@@ -349,6 +397,7 @@ def build(config, cache, refresh=False, osm_file=None):
         'Source query: '+json.dumps(source['query'],sort_keys=True),
         'Source query SHA256: '+source['queryHash']+'; configuration SHA256: '+digest(config),
     ]
+    notes.extend(config.get('landmarkAccessNotes',[]))
     if adapter=='chicago_socrata': notes.append('Chicago requires domestic=false; missing domestic flags fail eligibility. Outdoor park, waterfront, bridge and curbside bus stop premises are eligible; transit interiors are excluded.')
     elif adapter=='nyc_socrata': notes.extend([
         'NYPD complaints use their most serious offense; occurrence-year filtering is independent of report year. Historic release contains reports through the end of 2025, so later-reported 2025 occurrences may be absent.',
@@ -357,6 +406,15 @@ def build(config, cache, refresh=False, osm_file=None):
         'NYPD coordinates are approximate midblock/intersection positions. Rape/sex offenses are relocated to precinct station houses and excluded. Other un-geocodable complaints can also be placed at station houses; the source has no reliable fallback-location flag, so residual spatial bias remains.',
         'Park/beach incidents may be geocoded to bordering streets. This index must not identify exact addresses, crime locations, or individual people.',
         'Official NYPD footnotes: https://data.cityofnewyork.us/api/views/qgea-i56i/files/b21ec89f-4d7b-494e-b2e9-f69ae7f4c228?download=true',
+    ])
+    elif adapter=='ssp_sp_xlsx': notes.extend([
+        'SSP-SP CelularesSubtraidos workbook is an exploratory raw release, not official crime statistics. It contains joined phone/person/offense rows; devices and row multiplicity never weight the index.',
+        'Reports are identified by the publisher-prescribed NOME_DELEGACIA + ANO_BO + NUM_BO key. Only highest numeric VERSAO rows survive; inconsistent latest date/time/location fields fail eligibility. All workbook physical rows and the declared worksheet dimension are checked before publication.',
+        'Only theft/robbery with DESCR_CONDUTA=Transeunte, configured public street/plaza/park premises, and an exact occurrence date and hour qualify. Vehicle/transit interiors and generic Outros conduct are excluded. No domestic or stranger relationship is inferred.',
+        'Missing HORA_OCORRENCIA or any broad DESCR_PERIODO value is excluded, never converted to midnight. Excel date/time values are interpreted in America/Sao_Paulo; occurrence and registration dates differ. This 2025 registration-year workbook can omit incidents reported in later years.',
+        'Coordinates are source geocodes with possible errors, not verified incident positions. Records whose CIDADE is not S.PAULO are excluded. The publisher suppresses protected locations and personal fields; no addresses, phone details, demographics or report IDs are distributed.',
+        'sourceReportCount counts distinct latest-version reports with coordinates in the halo before category/time filtering. Full-workbook physical-row/report counts and SHA256 are in Source query. Unlocated/out-of-halo report counts are workbook-wide, not missingCoordinateCount.',
+        'Official methodology and dictionary: METODOLOGIA and DICIONARIO DE DADOS sheets in the source workbook. Source: Secretaria da Seguranca Publica do Estado de Sao Paulo; https://www.ssp.sp.gov.br/estatistica/consultas',
     ])
     elif adapter=='sf_socrata': notes.extend([
         'SF sourceReportCount counts unique source row_id offense rows, not unique incident reports. Only initial report type II is eligible; each incident_id contributes once after eligibility filtering. Multiple eligible offense rows in one incident are excluded as duplicates.',

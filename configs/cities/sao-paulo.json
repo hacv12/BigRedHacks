@@ -1,0 +1,110 @@
+{
+  "periodStart": "2025-01-01",
+  "periodEnd": "2025-12-31",
+  "cellSizeMeters": 250,
+  "haloMeters": 750,
+  "osmEndpoint": "https://overpass-api.de/api/interpreter",
+  "countryCode": "BR",
+  "id": "sao-paulo-centro",
+  "cityId": "sao-paulo",
+  "city": "São Paulo",
+  "district": "Paulista–Centro",
+  "region": "São Paulo",
+  "regionCode": "SP",
+  "timezone": "America/Sao_Paulo",
+  "description": "Paulista–Centro walking coverage · pedestrian cellphone theft/robbery reports",
+  "bounds": [
+    -46.672,
+    -23.575,
+    -46.629,
+    -23.535
+  ],
+  "defaultOriginId": "copan",
+  "defaultDestinationId": "se",
+  "source": {
+    "adapter": "ssp_sp_xlsx",
+    "endpoint": "https://www.ssp.sp.gov.br/assets/estatistica/transparencia/baseDados/celularesSub/CelularesSubtraidos_2025.xlsx",
+    "url": "https://www.ssp.sp.gov.br/estatistica/consultas",
+    "name": "SSP-SP · Celulares Subtraídos 2025 · pedestrian reports",
+    "worksheet": "CELULAR_2025",
+    "categories": {
+      "Roubo (art. 157)": "ROBBERY",
+      "Furto (art. 155)": "THEFT"
+    },
+    "conductAllowlist": [
+      "Transeunte"
+    ],
+    "places": [
+      "Via Pública",
+      "Lazer e Recreação"
+    ],
+    "subplaces": [
+      "Via Pública",
+      "Transeunte",
+      "Praça",
+      "Parque/Bosque/Horto/Reserva"
+    ]
+  },
+  "landmarks": [
+    {
+      "id": "masp",
+      "name": "MASP · Paulista sidewalk",
+      "point": [
+        -46.6560141,
+        -23.5616706
+      ],
+      "osmNodeId": "11285331454"
+    },
+    {
+      "id": "japan-house",
+      "name": "Japan House",
+      "point": [
+        -46.6455,
+        -23.5708
+      ]
+    },
+    {
+      "id": "republica",
+      "name": "Praça da República",
+      "point": [
+        -46.6426,
+        -23.5433
+      ]
+    },
+    {
+      "id": "copan",
+      "name": "Edifício Copan",
+      "point": [
+        -46.6446,
+        -23.5467
+      ]
+    },
+    {
+      "id": "biblioteca",
+      "name": "Biblioteca Mário de Andrade",
+      "point": [
+        -46.6421,
+        -23.5475
+      ]
+    },
+    {
+      "id": "se",
+      "name": "Praça da Sé",
+      "point": [
+        -46.634,
+        -23.5505
+      ]
+    },
+    {
+      "id": "augusta",
+      "name": "Parque Augusta",
+      "point": [
+        -46.6502,
+        -23.5506
+      ]
+    }
+  ],
+  "landmarkAccessNotes": [
+    "MASP uses reviewed surface sidewalk OSM node 11285331454 on sidewalk way 1217933412 and marked crossing 226414787. It is not the geometrically closer underground Nove de Julho tunnel or a verified museum entrance. Other listed access nodes were checked for tunnel/layer conflicts in this snapshot."
+  ]
+}
