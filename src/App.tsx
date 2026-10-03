@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
@@ -20,6 +20,9 @@ import {
 import { createRoutePlanner } from './domain/planner-client';
 import { loadCatalog, loadDataset } from './data/loaders';
 import WalkDetails from './components/WalkDetails';
+import RecentReports from './components/RecentReports';
+import { useRecentActivity } from './data/use-recent-activity';
+import { aggregateRecentBubbles, bubbleRadius } from './domain/recent-bubbles';
 import {
   encodeTripUrl,
   parseTripUrl,
@@ -52,6 +55,41 @@ export default function App() {
   const planner = useRef<ReturnType<typeof createRoutePlanner> | null>(null);
   const incomingTrip = useRef<SharedTrip | null>(null);
   const area = catalog?.areas.find((item) => item.id === areaId);
+  const recent = useRecentActivity(area);
+  const [activityCategory, setActivityCategory] = useState('all');
+  const [selectedActivity, setSelectedActivity] = useState<string | null>(null);
+  const recentPanel = useRef<HTMLDivElement>(null);
+  const activityBubbles = useMemo(
+    () =>
+      data && recent.feed
+        ? aggregateRecentBubbles(
+            recent.feed.records,
+            data.cells,
+            data.manifest.planningBounds,
+            activityCategory === 'all' ? undefined : activityCategory,
+          )
+        : [],
+    [data, recent.feed, activityCategory],
+  );
+  useEffect(() => {
+    setActivityCategory('all');
+    setSelectedActivity(null);
+  }, [areaId]);
+  useEffect(
+    () => setSelectedActivity(null),
+    [activityCategory, recent.enabled],
+  );
+  useEffect(() => {
+    if (
+      recent.feed &&
+      activityCategory !== 'all' &&
+      !recent.feed.records.some(
+        (record) => record.category === activityCategory,
+      )
+    ) {
+      setActivityCategory('all');
+    }
+  }, [recent.feed, activityCategory]);
   const windows = data?.manifest.timeBuckets ?? [];
   const period = data
     ? [
@@ -355,6 +393,8 @@ export default function App() {
       maxZoom: 19,
     });
     map.current = m;
+    m.createPane('recent-counts').style.zIndex = '450';
+    m.getPane('recent-counts')!.style.pointerEvents = 'none';
     m.fitBounds([
       [b[1], b[0]],
       [b[3], b[2]],
@@ -525,6 +565,79 @@ export default function App() {
   }, [data, result, selected, overlay, bucket, plannedPoints, dirty]);
 
   useEffect(() => {
+    const m = map.current;
+    if (!m || !data || !recent.enabled || !recent.feed) return;
+    const group = L.layerGroup().addTo(m);
+    activityBubbles.forEach((bubble) => {
+      const active = bubble.id === selectedActivity;
+      if (active)
+        L.rectangle(
+          [
+            [bubble.bounds[1], bubble.bounds[0]],
+            [bubble.bounds[3], bubble.bounds[2]],
+          ],
+          {
+            color: '#7040a3',
+            weight: 2,
+            fillOpacity: 0.06,
+            dashArray: '4 3',
+            interactive: false,
+          },
+        )
+          .addTo(group)
+          .bringToBack();
+      const description = document.createElement('span');
+      description.textContent = `${bubble.count} ${recent.source?.kind === 'calls' ? 'unverified calls' : 'published reports'} · approximate 250 m cell`;
+      L.circleMarker(latlng(bubble.center), {
+        radius: bubbleRadius(bubble.count),
+        color: active ? '#442469' : '#7040a3',
+        weight: active ? 3 : 1.5,
+        fillColor: '#cbb0e4',
+        fillOpacity: active ? 0.9 : 0.75,
+        interactive: !picking,
+        bubblingMouseEvents: false,
+      })
+        .bindTooltip(description)
+        .on('click', () => {
+          if (pickRef.current) return;
+          setSelectedActivity(bubble.id);
+          requestAnimationFrame(() =>
+            recentPanel.current
+              ?.querySelector('.recent-selection')
+              ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }),
+          );
+        })
+        .addTo(group)
+        .bringToBack();
+      const label = document.createElement('span');
+      label.textContent = String(bubble.count);
+      const radius = bubbleRadius(bubble.count);
+      L.marker(latlng(bubble.center), {
+        pane: 'recent-counts',
+        interactive: false,
+        keyboard: false,
+        icon: L.divIcon({
+          className: 'activity-count',
+          html: label,
+          iconSize: [radius * 2, radius * 2],
+          iconAnchor: [radius, radius],
+        }),
+      }).addTo(group);
+    });
+    return () => {
+      group.remove();
+    };
+  }, [
+    data,
+    recent.enabled,
+    recent.feed,
+    recent.source,
+    activityBubbles,
+    selectedActivity,
+    picking,
+  ]);
+
+  useEffect(() => {
     if (map.current) fitComparison(map.current, result);
   }, [fit, result]);
   useEffect(() => {
@@ -657,6 +770,30 @@ export default function App() {
             </div>
           ) : (
             <>
+              {area && (
+                <div ref={recentPanel}>
+                  <RecentReports
+                    area={area}
+                    {...recent}
+                    bubbles={activityBubbles}
+                    selectedId={selectedActivity}
+                    category={activityCategory}
+                    onCategoryChange={setActivityCategory}
+                    onSelect={(id) => {
+                      setSelectedActivity(id);
+                      const bubble = activityBubbles.find(
+                        (item) => item.id === id,
+                      );
+                      if (
+                        bubble &&
+                        map.current &&
+                        !map.current.getBounds().contains(latlng(bubble.center))
+                      )
+                        map.current.panTo(latlng(bubble.center));
+                    }}
+                  />
+                </div>
+              )}
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -1001,6 +1138,39 @@ export default function App() {
                       No reports does not mean no risk.
                     </p>
                   </>
+                )}
+                <button
+                  className="intensity-toggle activity-layer-toggle"
+                  aria-pressed={recent.enabled}
+                  onClick={recent.onToggle}
+                >
+                  <span>
+                    <i className="activity-key" /> Latest activity bubbles
+                  </span>
+                  <span className={`toggle ${recent.enabled ? 'on' : ''}`} />
+                </button>
+                {recent.enabled && (
+                  <p className="legend-caveat activity-legend-note">
+                    {recent.loading
+                      ? 'Checking source…'
+                      : recent.error
+                        ? 'Update unavailable · see details'
+                        : recent.source?.kind === 'calls'
+                          ? 'Unverified calls · 48-hour window'
+                          : recent.feed
+                            ? `${recent.feed.windowStart.slice(0, 10)} – ${recent.feed.windowEnd.slice(0, 10)}`
+                            : 'See source availability'}
+                    <button
+                      onClick={() =>
+                        recentPanel.current?.scrollIntoView({
+                          behavior: 'smooth',
+                          block: 'start',
+                        })
+                      }
+                    >
+                      Details & dates
+                    </button>
+                  </p>
                 )}
               </div>
             </div>

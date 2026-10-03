@@ -51,6 +51,57 @@
   font-weight: 400;
   font-size: 14px;
 }
+.activity-count {
+  display: grid;
+  place-items: center;
+  color: #351747;
+  font-size: 11px;
+  font-weight: 800;
+  pointer-events: none;
+}
+.activity-key {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #cbb0e4;
+  border: 1px solid #7040a3;
+  margin-right: 6px;
+}
+.activity-layer-toggle {
+  border-top: 1px solid #e4e9e6 !important;
+  padding-top: 9px !important;
+  margin-top: 7px;
+}
+.activity-legend-note button {
+  display: block;
+  border: 0;
+  background: none;
+  color: #116e5e;
+  text-decoration: underline;
+  padding: 4px 0;
+  font-size: 11px;
+}
+.recent-reports {
+  margin-bottom: 18px;
+}
+@media (max-width: 900px) {
+  .map-panel .route-map-label {
+    bottom: 150px;
+  }
+  .map-panel:has(.intensity-scale) .route-map-label {
+    bottom: 205px;
+  }
+  .map-panel:has(.activity-layer-toggle[aria-pressed='true']) .route-map-label {
+    bottom: 205px;
+  }
+  .map-panel:has(.intensity-scale):has(
+      .activity-layer-toggle[aria-pressed='true']
+    )
+    .route-map-label {
+    bottom: 260px;
+  }
+}
 * {
   box-sizing: border-box;
 }
