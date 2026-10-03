@@ -8,3 +8,10 @@
 
 # Logs
 *.log
+
+# Build and dependencies
+node_modules/
+dist/
+coverage/
+.data-cache/
+*.tsbuildinfo
