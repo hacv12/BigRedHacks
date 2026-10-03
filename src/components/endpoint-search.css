@@ -1,0 +1,140 @@
+.endpoint-search {
+  position: relative;
+  min-width: 0;
+  color: #183d39;
+}
+.endpoint-search > label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.endpoint-search-field {
+  display: flex;
+  border: 1px solid #879e94;
+  border-radius: 6px;
+  background: white;
+}
+.endpoint-search-field:focus-within {
+  outline: 2px solid #116e5e;
+  outline-offset: 1px;
+}
+.endpoint-search-field input {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #183d39;
+  font: inherit;
+  font-size: 16px;
+}
+.endpoint-search-field input::placeholder {
+  color: #526b62;
+}
+.endpoint-search button {
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.endpoint-search button:focus-visible,
+.endpoint-provider a:focus-visible {
+  outline: 3px solid #116e5e;
+  outline-offset: 2px;
+}
+.endpoint-search .endpoint-clear {
+  min-width: 44px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  display: grid;
+  place-items: center;
+}
+.endpoint-search-help,
+.endpoint-search-status,
+.endpoint-provider {
+  font-size: 11px;
+  line-height: 1.4;
+  margin: 6px 0;
+  color: #526b62;
+}
+.endpoint-suggestions {
+  margin: 5px 0;
+  border: 1px solid #b5cabe;
+  border-radius: 6px;
+  background: white;
+  overflow: hidden;
+}
+.endpoint-suggestions ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.endpoint-suggestions li {
+  display: grid;
+  gap: 3px;
+  min-height: 48px;
+  padding: 10px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #e1e8e3;
+}
+.endpoint-suggestions li[aria-selected='true'],
+.endpoint-suggestions li:hover {
+  background: #eaf4ef;
+  box-shadow: inset 3px 0 #116e5e;
+}
+.endpoint-suggestions li strong {
+  font-size: 14px;
+}
+.endpoint-suggestions li span,
+.endpoint-suggestions li small {
+  font-size: 11px;
+  line-height: 1.4;
+  color: #526b62;
+}
+.endpoint-search-status,
+.endpoint-provider {
+  padding: 0 12px;
+}
+.endpoint-provider a {
+  color: #116e5e;
+}
+.endpoint-search-error {
+  padding: 8px;
+  margin: 6px 0;
+  color: #74351b;
+  background: #fff1e7;
+  font-size: 12px;
+  line-height: 1.4;
+  border-radius: 6px;
+}
+.endpoint-search-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+}
+.endpoint-search-actions button {
+  display: grid;
+  place-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 6px;
+  border: 0;
+  background: transparent;
+  color: #526b62;
+}
+.endpoint-search-actions button:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+@media (min-width: 901px) {
+  .endpoint-search-field input {
+    font-size: 14px;
+  }
+}
