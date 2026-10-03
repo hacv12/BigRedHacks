@@ -13,7 +13,7 @@ class SnapshotTests(unittest.TestCase):
     def test_catalog_and_packages(self):
         self.assertEqual(self.catalog['version'],1)
         self.assertEqual(self.catalog['defaultAreaId'],'nyc-manhattan')
-        self.assertEqual({a['cityId'] for a in self.catalog['areas']},{'nyc','chicago'})
+        self.assertEqual({a['cityId'] for a in self.catalog['areas']},{'nyc','chicago','sf'})
         for area,data in zip(self.catalog['areas'],self.datasets):
             with self.subTest(area=area['id']):
                 build.validate_snapshot(data);m=data['manifest']
@@ -106,6 +106,23 @@ class IngestionTests(unittest.TestCase):
                 cells,_,excluded,_=build.aggregate([{**base,**change}],config,grid)
                 self.assertEqual(sum(c['total'] for c in cells),expected)
                 if reason:self.assertEqual(excluded[reason],1)
+    def test_sf_street_codes_initial_reports_and_deduplication(self):
+        config=build.load_config(ROOT/'configs/cities/sf.json');grid=build.Grid(config)
+        base={'row_id':'1','incident_id':'report-1','incident_datetime':'2025-06-01T08:00:00.000','incident_code':'03014','report_type_code':'II','longitude':'-122.407','latitude':'37.788'}
+        cases=[({},1,None),({'incident_code':'03411'},1,None),({'incident_code':'03074'},0,'other category'),({'incident_code':'06364'},0,'other category'),({'report_type_code':'IS'},0,'non-initial report'),({'incident_id':''},0,'missing incident report ID'),({'incident_datetime':'2025-03-09T02:30:00'},0,'malformed occurrence timestamp')]
+        for change,expected,reason in cases:
+            with self.subTest(change=change):
+                cells,_,excluded,_=build.aggregate([{**base,**change}],config,grid)
+                self.assertEqual(sum(c['total'] for c in cells),expected)
+                if reason:self.assertEqual(excluded[reason],1)
+        rows=[base,{**base,'row_id':'2','incident_code':'03011'},{**base,'row_id':'3','incident_id':'report-2'}]
+        cells,_,excluded,_=build.aggregate(rows,config,grid)
+        self.assertEqual(sum(c['total'] for c in cells),2)
+        self.assertEqual(excluded['additional eligible offense in incident report'],1)
+        query=build.source_query(config,grid)
+        self.assertEqual(query['key'],'row_id')
+        self.assertIn('incident_datetime',query['where']);self.assertIn('within_box(point,',query['where'])
+
     def test_complete_source_count_and_unique_ids(self):
         build.assert_complete([{'id':'1'},{'id':'2'}],2,'id')
         for rows,expected in [([{'id':'1'}],2),([{'id':'1'},{'id':'1'}],2),([{}],1)]:

@@ -8,7 +8,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 BOUNDS = [-87.644, 41.866, -87.617, 41.891]  # legacy graph() default only
 BUCKETS = ['Midnight–6 am', '6 am–noon', 'Noon–6 pm', '6 pm–midnight']
 MODEL = 'brisa-250m-shrink20-cross-v2'
-ADAPTERS = {'chicago_socrata', 'nyc_socrata', 'normalized_csv'}
+ADAPTERS = {'chicago_socrata', 'nyc_socrata', 'sf_socrata', 'normalized_csv'}
 
 def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
@@ -30,7 +30,7 @@ def fetch(url, target, data=None):
     target = pathlib.Path(target); target.parent.mkdir(parents=True, exist_ok=True)
     temporary = tempfile.NamedTemporaryFile(prefix=target.name+'.', suffix='.part', dir=target.parent, delete=False)
     temporary.close(); partial = pathlib.Path(temporary.name)
-    cmd = ['curl','--user-agent','BigRedHacks-demo/0.2 (https://github.com/hacv12/BigRedHacks)',
+    cmd = ['curl','--location','--user-agent','BigRedHacks-demo/0.2 (https://github.com/hacv12/BigRedHacks)',
            '--fail','--show-error','--silent','--retry','3','--retry-all-errors','--max-time','180',url,'-o',str(partial)]
     if data: cmd += ['--data-urlencode','data='+data]
     try:
@@ -98,11 +98,13 @@ def source_query(config, grid):
     s=config['source']; adapter=s['adapter']
     start=config['periodStart']+'T00:00:00'
     end=(datetime.date.fromisoformat(config['periodEnd'])+datetime.timedelta(days=1)).isoformat()+'T00:00:00'
-    date='date' if adapter=='chicago_socrata' else 'cmplnt_fr_dt'
-    location='location' if adapter=='chicago_socrata' else 'lat_lon'
+    date={'chicago_socrata':'date','sf_socrata':'incident_datetime'}.get(adapter,'cmplnt_fr_dt')
+    location={'chicago_socrata':'location','sf_socrata':'point'}.get(adapter,'lat_lon')
     where=f"{date} >= '{start}' AND {date} < '{end}' AND within_box({location}, {grid.halo[3]}, {grid.halo[0]}, {grid.halo[1]}, {grid.halo[2]})"
     if adapter=='chicago_socrata':
         fields='id,date,primary_type,description,location_description,domestic,latitude,longitude'; key='id'
+    elif adapter=='sf_socrata':
+        fields='row_id,incident_id,incident_datetime,incident_code,incident_description,report_type_code,latitude,longitude'; key='row_id'
     else:
         fields='cmplnt_num,cmplnt_fr_dt,cmplnt_fr_tm,cmplnt_to_dt,cmplnt_to_tm,rpt_dt,ky_cd,ofns_desc,pd_cd,pd_desc,prem_typ_desc,loc_of_occur_desc,latitude,longitude'; key='cmplnt_num'
     return {'where':where,'select':fields,'key':key,'extraction':'single-response-up-to-100000-otherwise-system-row-id-pages'}
@@ -171,13 +173,18 @@ def normalize_record(row, config):
     adapter=config['source']['adapter']
     if adapter=='chicago_socrata':
         return {'id':row.get('id'),'time':row.get('date'),'category':row.get('primary_type'),'place':row.get('location_description'),'point':[row.get('longitude'),row.get('latitude')],'domestic':row.get('domestic')}
+    if adapter=='sf_socrata':
+        # The source has no premises column. Only explicitly place-coded offenses qualify.
+        code=str(row.get('incident_code',''))
+        place='STREET OR PUBLIC PLACE (OFFENSE CODE)' if code in {'03011','03012','03013','03014','03411','03412','03413','03414'} else None
+        return {'id':row.get('row_id'),'reportId':row.get('incident_id'),'reportType':row.get('report_type_code'),'time':row.get('incident_datetime'),'category':code,'place':place,'point':[row.get('longitude'),row.get('latitude')]}
     if adapter=='nyc_socrata':
         date=row.get('cmplnt_fr_dt',''); time=row.get('cmplnt_fr_tm','')
         return {'id':row.get('cmplnt_num'),'time':date[:10]+'T'+time if isinstance(date,str) and isinstance(time,str) else None,'category':str(row.get('ky_cd','')),'subtype':str(row.get('pd_cd','')),'place':row.get('prem_typ_desc'),'point':[row.get('longitude'),row.get('latitude')],'endDate':row.get('cmplnt_to_dt'),'endTime':row.get('cmplnt_to_tm')}
     return {'id':row.get('id'),'time':row.get('occurred_at'),'category':row.get('category'),'place':row.get('place'),'point':[row.get('longitude'),row.get('latitude')]}
 
 def aggregate(rows, config, grid):
-    counts=collections.defaultdict(lambda:[0]*4); exclusions=collections.Counter();seen=set();missing=0
+    counts=collections.defaultdict(lambda:[0]*4); exclusions=collections.Counter();seen=set();included_reports=set();missing=0
     adapter=config['source']['adapter']; source=config['source']
     start=datetime.date.fromisoformat(config['periodStart']); end=datetime.date.fromisoformat(config['periodEnd'])
     for row in rows:
@@ -193,6 +200,9 @@ def aggregate(rows, config, grid):
         subtypes=source.get('subtypes',{}).get(r['category'])
         if subtypes is not None and r.get('subtype') not in subtypes: exclusions['other offense subtype']+=1;continue
         if adapter=='chicago_socrata' and r.get('domestic') is not False: exclusions['domestic or missing domestic flag']+=1;continue
+        if adapter=='sf_socrata':
+            if r.get('reportType')!='II': exclusions['non-initial report']+=1;continue
+            if not str(r.get('reportId') or '').strip(): exclusions['missing incident report ID']+=1;continue
         if r['place'] not in source['places']: exclusions['other or missing place']+=1;continue
         try:
             dt=parse_local(r['time'],config['timezone'])
@@ -204,6 +214,10 @@ def aggregate(rows, config, grid):
                 # A range contained within one date and bucket can be assigned unambiguously.
                 if dt.date()!=enddt.date() or dt.hour//6!=enddt.hour//6: exclusions['occurrence interval crosses time bucket']+=1;continue
         except (ValueError,TypeError): exclusions['malformed occurrence timestamp']+=1;continue
+        if adapter=='sf_socrata':
+            report=str(r['reportId'])
+            if report in included_reports: exclusions['additional eligible offense in incident report']+=1;continue
+            included_reports.add(report)
         counts[index][dt.hour//6]+=1
     activity={}
     for x in range(grid.nx):
@@ -343,6 +357,13 @@ def build(config, cache, refresh=False, osm_file=None):
         'NYPD coordinates are approximate midblock/intersection positions. Rape/sex offenses are relocated to precinct station houses and excluded. Other un-geocodable complaints can also be placed at station houses; the source has no reliable fallback-location flag, so residual spatial bias remains.',
         'Park/beach incidents may be geocoded to bordering streets. This index must not identify exact addresses, crime locations, or individual people.',
         'Official NYPD footnotes: https://data.cityofnewyork.us/api/views/qgea-i56i/files/b21ec89f-4d7b-494e-b2e9-f69ae7f4c228?download=true',
+    ])
+    elif adapter=='sf_socrata': notes.extend([
+        'SF sourceReportCount counts unique source row_id offense rows, not unique incident reports. Only initial report type II is eligible; each incident_id contributes once after eligibility filtering. Multiple eligible offense rows in one incident are excluded as duplicates.',
+        'SF has no premises column or domestic/stranger flag. Only explicit Street or Public Place robbery and attempted robbery codes 03011-03014 and 03411-03414 are eligible. Public place does not guarantee an outdoor setting; generic robbery, theft, vehicle and business offenses are excluded.',
+        'SF maps incident locations to nearby privacy-approved intersections, not exact incident points. Its intersection mapping changed April 24, 2024; historical reporting changes and delayed approvals may affect the data. Do not infer addresses or people from this aggregate index.',
+        'SF occurrence timestamp is incident_datetime in America/Los_Angeles, not report filing time. The source provides no occurrence-end field; unreported time uncertainty cannot be resolved. Initial reports can omit later supplemental corrections.',
+        'SF source is updated daily and may remove sealed or administratively withheld reports. Open Data Commons Public Domain Dedication and License. Official explainer: https://sfdigitalservices.gitbook.io/dataset-explainers/sfpd-incident-report-2018-to-present',
     ])
     else: notes.extend(['Normalized CSV uses publisher-defined category and place allowlists. No domestic flag is inferred; validate source-specific relevance before publication.', 'CSV content SHA256: '+source['query']['contentSha256']])
     manifest=dict(schemaVersion=1,datasetId=config['id'],cityId=config['cityId'],sourceName=config['source']['name'],sourceAdapter=adapter,

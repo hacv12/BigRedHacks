@@ -1,0 +1,101 @@
+{
+  "periodStart": "2025-01-01",
+  "periodEnd": "2025-12-31",
+  "cellSizeMeters": 250,
+  "haloMeters": 750,
+  "osmEndpoint": "https://overpass-api.de/api/interpreter",
+  "countryCode": "US",
+  "id": "sf-downtown",
+  "cityId": "sf",
+  "city": "San Francisco",
+  "district": "Downtown",
+  "region": "California",
+  "regionCode": "CA",
+  "timezone": "America/Los_Angeles",
+  "description": "Downtown San Francisco walking coverage \u00b7 street/public-place robbery reports",
+  "bounds": [
+    -122.426,
+    37.773,
+    -122.389,
+    37.803
+  ],
+  "defaultOriginId": "union-square",
+  "defaultDestinationId": "ferry",
+  "source": {
+    "adapter": "sf_socrata",
+    "endpoint": "https://data.sfgov.org/resource/wg3w-h783.json",
+    "url": "https://data.sf.gov/Public-Safety/Police-Department-Incident-Reports-2018-to-Present/wg3w-h783",
+    "name": "SFPD \u00b7 Incident Reports 2018 to Present \u00b7 street/public-place robbery",
+    "categories": {
+      "03011": "ROBBERY",
+      "03012": "ROBBERY",
+      "03013": "ROBBERY",
+      "03014": "ROBBERY",
+      "03411": "ATTEMPTED ROBBERY",
+      "03412": "ATTEMPTED ROBBERY",
+      "03413": "ATTEMPTED ROBBERY",
+      "03414": "ATTEMPTED ROBBERY"
+    },
+    "places": [
+      "STREET OR PUBLIC PLACE (OFFENSE CODE)"
+    ]
+  },
+  "landmarks": [
+    {
+      "id": "union-square",
+      "name": "Union Square",
+      "point": [
+        -122.4075,
+        37.7879
+      ]
+    },
+    {
+      "id": "ferry",
+      "name": "Ferry Building plaza",
+      "point": [
+        -122.3942,
+        37.7949
+      ]
+    },
+    {
+      "id": "civic",
+      "name": "Civic Center Plaza",
+      "point": [
+        -122.4175,
+        37.7793
+      ]
+    },
+    {
+      "id": "dragon",
+      "name": "Chinatown Dragon Gate",
+      "point": [
+        -122.4057,
+        37.7907
+      ]
+    },
+    {
+      "id": "yerba",
+      "name": "Yerba Buena Gardens",
+      "point": [
+        -122.4023,
+        37.7853
+      ]
+    },
+    {
+      "id": "transamerica",
+      "name": "Transamerica Pyramid",
+      "point": [
+        -122.4033,
+        37.7952
+      ]
+    },
+    {
+      "id": "washington",
+      "name": "Washington Square",
+      "point": [
+        -122.4102,
+        37.8008
+      ]
+    }
+  ]
+}

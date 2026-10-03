@@ -10,7 +10,7 @@ Select an explicit coverage rectangle, local IANA timezone, completed occurrence
 
 ## 2. Create configuration
 
-Copy `configs/cities/chicago.json` or `configs/cities/nyc.json`. Required metadata includes `id` (unique package slug), `cityId`, `city`, `district`, `region`, state/province `regionCode`, `countryCode`, `timezone`, `description`, west/south/east/north `bounds`, inclusive `periodStart`/`periodEnd`, source provenance, and landmarks/default IDs. `region` in the *catalog* is the district, while `regionCode` is the state/province code. The city config's `region` is descriptive state/province metadata.
+Copy `configs/cities/chicago.json`, `configs/cities/nyc.json` or `configs/cities/sf.json`. Required metadata includes `id` (unique package slug), `cityId`, `city`, `district`, `region`, state/province `regionCode`, `countryCode`, `timezone`, `description`, west/south/east/north `bounds`, inclusive `periodStart`/`periodEnd`, source provenance, and landmarks/default IDs. `region` in the *catalog* is the district, while `regionCode` is the state/province code. The city config's `region` is descriptive state/province metadata.
 
 Keep `cellSizeMeters: 250` and `haloMeters: 750` for this model. `gridReferenceLatitude` defaults to the midpoint of the planning rectangle. Provide useful public landmark coordinates inside bounds; every landmark must snap to the real walking graph within 75 m. If a landmark fails, inspect its real access point or omit it. Never fabricate a connected graph point.
 
@@ -18,6 +18,7 @@ Supported `source.adapter` values:
 
 - `chicago_socrata`: Chicago field names; requires `domestic=false`, configured primary categories and places.
 - `nyc_socrata`: NYPD historic field names; configured `ky_cd` categories, optional per-category `pd_cd` subtype lists, and premises. Handles separate occurrence date/time and intervals.
+- `sf_socrata`: SFPD occurrence timestamps and offense-row IDs; restricts to explicit Street or Public Place robbery/attempt codes and initial reports, counting each eligible incident ID once. Its place label comes from offense codes because there is no premises column; public place is not necessarily outdoors.
 - `normalized_csv`: a publisher-derived local CSV with the columns below. Supply `source.name`, `source.url`, `source.path`, `source.categories` (raw category to display label), and `source.places` (explicit list). Relative paths are resolved from the repository root.
 
 The CSV header is:
@@ -44,7 +45,7 @@ npm run build
 
 The compatibility default is `--city chicago`. `--city` accepts either a city ID or package ID. Configurations inside `configs/cities/*.json` are registered automatically; `--config` adds the explicit configuration to the current catalog build. `--output-dir /tmp/review-packages` creates review artifacts outside the public app. Do not put raw incident CSVs in `public/` or commit downloaded source caches.
 
-Downloads are cached by configuration, source and query hashes. Up to 100,000 source rows are fetched in one response; larger results use stable system-row-ID ordered pages. Results must match the counted total and contain unique nonempty report IDs; the count is checked again after extraction. Failed refreshes preserve prior complete source/graph caches. OSM caches include their exact endpoint, query and bounds; `--osm-file` accepts this wrapped format only. All selected packages and their catalog relationships validate before any output changes. Each output file is atomically replaced. A multi-file deployment still needs an atomic release mechanism; the development builder cannot make several filesystem renames one transaction.
+Downloads are cached by configuration, source and query hashes. Up to 100,000 source rows are fetched in one response; larger results use stable system-row-ID ordered pages. Results must match the counted total and contain unique nonempty source IDs (SF offense rows use `row_id`); the count is checked again after extraction. Failed refreshes preserve prior complete source/graph caches. OSM caches include their exact endpoint, query and bounds; `--osm-file` accepts this wrapped format only. All selected packages and their catalog relationships validate before any output changes. Each output file is atomically replaced. A multi-file deployment still needs an atomic release mechanism; the development builder cannot make several filesystem renames one transaction.
 
 ## 4. Review what the package claims
 
