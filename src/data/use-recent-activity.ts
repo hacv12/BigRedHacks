@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CoverageArea } from '../domain/types';
 import type { RecentFeed } from '../domain/recent-types';
 import { getRecentSource, loadRecentFeed } from './recent-reports';
+import { APP_VISIBILITY_EVENT, isAppVisible } from '../platform/lifecycle';
 
 /** Session-only cache: no individual reports are persisted to browser storage. */
 export function useRecentActivity(area: CoverageArea | undefined) {
@@ -32,7 +33,7 @@ export function useRecentActivity(area: CoverageArea | undefined) {
   const refresh = useCallback(
     async (force = false): Promise<void> => {
       if (!area || !source || !enabled || controller.current) return;
-      if (document.visibilityState !== 'visible') {
+      if (!isAppVisible()) {
         deferredRetry.current = true;
         return;
       }
@@ -68,7 +69,7 @@ export function useRecentActivity(area: CoverageArea | undefined) {
         retryTimer.current = window.setTimeout(
           () => {
             retryTimer.current = null;
-            if (document.visibilityState === 'visible') void refresh(true);
+            if (isAppVisible()) void refresh(true);
             else deferredRetry.current = true;
           },
           30_001 - (now - lastAttempt.current.at),
@@ -120,7 +121,7 @@ export function useRecentActivity(area: CoverageArea | undefined) {
     if (!enabled || !source) return;
     void refresh();
     const check = () => {
-      if (document.visibilityState !== 'visible') {
+      if (!isAppVisible()) {
         if (controller.current || retryTimer.current !== null) {
           deferredRetry.current = true;
           request.current += 1;
@@ -138,9 +139,11 @@ export function useRecentActivity(area: CoverageArea | undefined) {
     };
     const timer = window.setInterval(check, 30_000);
     document.addEventListener('visibilitychange', check);
+    document.addEventListener(APP_VISIBILITY_EVENT, check);
     return () => {
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange', check);
+      document.removeEventListener(APP_VISIBILITY_EVENT, check);
       request.current += 1;
       if (retryTimer.current !== null) window.clearTimeout(retryTimer.current);
       retryTimer.current = null;

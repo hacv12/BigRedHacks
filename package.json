@@ -11,9 +11,24 @@
     "data:refresh": "python3 scripts/build_data.py --all --refresh",
     "data:list": "python3 scripts/build_data.py --list",
     "test:e2e": "playwright test",
-    "format": "prettier --write src e2e vite.config.ts vitest.config.ts playwright.config.ts"
+    "format": "prettier --write src e2e vite.config.ts vitest.config.ts playwright.config.ts",
+    "build:native": "node scripts/build-native.mjs",
+    "app:sync": "npm run build:native && cap sync",
+    "app:android": "npm run app:sync && cap open android",
+    "app:ios": "npm run app:sync && cap open ios",
+    "icons": "node scripts/generate-icons.mjs",
+    "test:pwa": "node scripts/test-pwa.mjs"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/browser": "^8.0.5",
+    "@capacitor/clipboard": "^8.0.1",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/filesystem": "^8.1.4",
+    "@capacitor/geolocation": "^8.2.3",
+    "@capacitor/ios": "^8.5.2",
+    "@capacitor/share": "^8.0.3",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.468.0",
     "react": "^19.0.0",
@@ -21,6 +36,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
+    "@capacitor/cli": "8.4.3",
     "@playwright/test": "^1.63.0",
     "@types/leaflet": "^1.9.15",
     "@types/node": "^22.20.5",
@@ -28,6 +44,7 @@
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.4",
     "prettier": "^3.9.9",
+    "sharp": "^0.35.5",
     "typescript": "~5.7.3",
     "vite": "^6.1.0",
     "vitest": "^4.1.11"

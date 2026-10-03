@@ -1392,3 +1392,79 @@ input[type='range'] {
 .endpoint-search-field input:focus-visible {
   outline: 0;
 }
+
+/* Zero-inset browsers retain their layout; installed apps reserve system UI. */
+:root {
+  --safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --safe-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+  --safe-bottom: var(
+    --safe-area-inset-bottom,
+    env(safe-area-inset-bottom, 0px)
+  );
+  --safe-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+}
+body {
+  padding: 0 var(--safe-right) var(--safe-bottom) var(--safe-left);
+}
+.topbar {
+  height: calc(56px + var(--safe-top));
+  padding-top: var(--safe-top);
+}
+.workspace {
+  height: calc(100dvh - 56px - var(--safe-top) - var(--safe-bottom));
+}
+.details-dialog {
+  max-height: min(
+    85dvh,
+    calc(100dvh - var(--safe-top) - var(--safe-bottom) - 32px)
+  );
+  max-width: min(
+    680px,
+    calc(100vw - var(--safe-left) - var(--safe-right) - 32px)
+  );
+}
+@media (max-width: 900px) {
+  .topbar {
+    height: calc(52px + var(--safe-top));
+  }
+  .workspace {
+    height: auto;
+    min-height: calc(100dvh - 52px - var(--safe-top) - var(--safe-bottom));
+  }
+  .results,
+  .activity-details {
+    scroll-margin-top: calc(64px + var(--safe-top));
+  }
+  .planner form {
+    scroll-margin-top: calc(66px + var(--safe-top));
+  }
+}
+@media (pointer: coarse) {
+  :root button,
+  :root summary,
+  :root select {
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+  .endpoint-search-actions button,
+  .endpoint-search .endpoint-clear,
+  .map-tools button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .leaflet-touch .leaflet-control-zoom a {
+    width: 44px;
+    height: 44px;
+    line-height: 44px;
+  }
+  input,
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+}
+@media (display-mode: standalone) {
+  html {
+    overscroll-behavior-y: none;
+  }
+}

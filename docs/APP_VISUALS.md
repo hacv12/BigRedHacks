@@ -1,0 +1,11 @@
+# App icons and safe areas
+
+Run `node scripts/generate-icons.mjs` after changing `public/favicon.svg`. Sharp rasterizes the existing vector brand into opaque RGB PNGs: 192 and 512 px PWA icons, a 180 px Apple touch icon, a 512 px maskable icon, and `assets/icon-only.png` at 1024 px for native packaging. The source remains the repository SVG; no remote image service is used. Native icons have a full square background because the operating system supplies the corner mask. The maskable mark is inset further inside the central safe region.
+
+`index.html` uses `viewport-fit=cover` without disabling user zoom. CSS reserves notch, landscape cutout and home-indicator space using Capacitor's `--safe-area-inset-*` values with browser `env(safe-area-inset-*)` fallbacks. Zero inset values leave normal browser spacing unchanged. Coarse-pointer controls have 44 px minimum touch targets; text fields remain at least 16 px to avoid unexpected iOS focus zoom. Standalone mode disables document overscroll chaining without disabling map gestures or pinch zoom.
+
+Capacitor 8 documents its Android CSS inset injection for older WebViews in [SystemBars](https://capacitorjs.com/docs/apis/system-bars). Native status-bar foreground colors must match the white header; verify the platform's rendered result rather than inferring foreground color from enum names.
+
+Smoke checks used a 390×844 portrait viewport with 47 px top/34 px bottom insets and an 844×390 landscape viewport with 44 px side/21 px bottom insets. Both kept document width within the viewport and measured endpoint/map action targets at 44×44 px. These browser checks simulate injected insets; final device testing must still verify keyboard, rotation and actual OS bars.
+
+When native platform directories exist, the same generator also writes Android legacy icons at 48/72/96/144/192 px, round variants, transparent adaptive foregrounds at 108/162/216/324/432 px, matching dark adaptive backgrounds, and the iOS universal 1024 px opaque app icon. All stock splash PNGs are replaced with neutral white images at their original dimensions. Adaptive foreground artwork is scaled into the central safe region; no platform project or application code is rewritten. Two consecutive generator runs produced identical hashes across all 40 generated files.

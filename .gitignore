@@ -12,6 +12,9 @@
 # Build and dependencies
 node_modules/
 dist/
+dist-native/
+dist-pwa-test/
+artifacts/
 coverage/
 .data-cache/
 *.tsbuildinfo

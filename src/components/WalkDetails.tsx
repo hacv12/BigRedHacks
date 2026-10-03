@@ -2,6 +2,13 @@ import { useRef, useState } from 'react';
 import { Check, Copy, Download, Map, Route, Share2 } from 'lucide-react';
 import type { BucketIndex, DataManifest, PlannedRoute } from '../domain/types';
 import { exportRouteGpx, exportRouteText } from '../domain/trip-tools';
+import {
+  copyText,
+  exportFile,
+  getShareableTripUrl,
+  isNativePlatform,
+  shareText,
+} from '../platform/native';
 
 interface Props {
   route: PlannedRoute;
@@ -10,17 +17,6 @@ interface Props {
   budget: number;
   createShareUrl: () => string;
   showMap: () => void;
-}
-
-function download(contents: string, filename: string, type: string) {
-  const url = URL.createObjectURL(new Blob([contents], { type }));
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.append(anchor);
-  anchor.click();
-  anchor.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export default function WalkDetails({
@@ -32,12 +28,39 @@ export default function WalkDetails({
   showMap,
 }: Props) {
   const [shareUrl, setShareUrl] = useState('');
+  const [shareOpen, setShareOpen] = useState(false);
+  const [working, setWorking] = useState(false);
+  const native = isNativePlatform();
   const [copied, setCopied] = useState(false);
   const [message, setMessage] = useState('');
   const linkInput = useRef<HTMLInputElement>(null);
   const context = { manifest, bucket, maxExtraMinutes: budget };
   const filename = `brisa-${manifest.datasetId}-${route.id.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40)}`;
 
+  async function saveFile(contents: string, name: string, mime: string) {
+    setWorking(true);
+    setMessage('');
+    try {
+      await exportFile(contents, name, mime);
+    } catch {
+      setMessage('Could not export this file. Try again.');
+    } finally {
+      setWorking(false);
+    }
+  }
+  async function systemShare() {
+    setWorking(true);
+    setMessage('');
+    try {
+      await shareText(exportRouteText(route, context), shareUrl || undefined);
+    } catch {
+      setMessage(
+        'Sharing was cancelled or unavailable. Your walking plan is unchanged.',
+      );
+    } finally {
+      setWorking(false);
+    }
+  }
   return (
     <section className="walk-details" aria-label="Selected walk details">
       <div className="walk-details-title">
@@ -118,71 +141,102 @@ export default function WalkDetails({
         <button
           className="share-button"
           onClick={() => {
-            setShareUrl(createShareUrl());
             setMessage('');
+            setCopied(false);
+            try {
+              setShareUrl(getShareableTripUrl(createShareUrl()) ?? '');
+              setShareOpen(true);
+            } catch {
+              setMessage(
+                'Could not prepare the trip link. Try exporting the summary.',
+              );
+            }
           }}
         >
           <Share2 size={16} /> Share trip
         </button>
         <button
           className="quiet-button"
+          disabled={working}
           onClick={() =>
-            download(
+            saveFile(
               exportRouteGpx(route, context),
               `${filename}.gpx`,
               'application/gpx+xml',
             )
           }
         >
-          <Download size={15} /> Download GPX
+          <Download size={15} /> {native ? 'Export GPX' : 'Download GPX'}
         </button>
         <button
           className="quiet-button summary-download"
+          disabled={working}
           onClick={() =>
-            download(
+            saveFile(
               exportRouteText(route, context),
               `${filename}.txt`,
               'text/plain;charset=utf-8',
             )
           }
         >
-          Download summary
+          {native ? 'Export summary' : 'Download summary'}
         </button>
       </div>
-      {shareUrl && (
+      {shareOpen && (
         <div className="share-panel">
-          <label htmlFor="share-link">Shareable trip link</label>
-          <p>
-            This link includes both locations. Anyone you give it to can open
-            this trip. Routes are recalculated from the available snapshot.
-          </p>
-          <input
-            id="share-link"
-            ref={linkInput}
-            value={shareUrl}
-            readOnly
-            onFocus={(event) => event.target.select()}
-          />
-          <button
-            className="quiet-button"
-            onClick={async () => {
-              try {
-                await navigator.clipboard.writeText(shareUrl);
-                setCopied(true);
-                setMessage('Link copied.');
-              } catch {
-                linkInput.current?.focus();
-                linkInput.current?.select();
-                setMessage('Select and copy the link above.');
-              }
-            }}
-          >
-            {copied ? <Check size={15} /> : <Copy size={15} />}
-            {copied ? 'Copied' : 'Copy link'}
-          </button>
-          <span role="status">{message}</span>
+          {shareUrl ? (
+            <>
+              <label htmlFor="share-link">Shareable trip link</label>
+              <p>
+                This link includes both locations. Anyone you give it to can
+                open this trip. Routes are recalculated from the available
+                snapshot.
+              </p>
+              <input
+                id="share-link"
+                ref={linkInput}
+                value={shareUrl}
+                readOnly
+                onFocus={(event) => event.target.select()}
+              />
+              <button
+                className="quiet-button"
+                onClick={async () => {
+                  try {
+                    await copyText(shareUrl);
+                    setCopied(true);
+                    setMessage('Link copied.');
+                  } catch {
+                    linkInput.current?.focus();
+                    linkInput.current?.select();
+                    setMessage('Select and copy the link above.');
+                  }
+                }}
+              >
+                {copied ? <Check size={15} /> : <Copy size={15} />}
+                {copied ? 'Copied' : 'Copy link'}
+              </button>
+            </>
+          ) : (
+            <p>
+              No public trip-link address is configured for this app. You can
+              share the route summary or export its geometry instead; these
+              include the selected walking path and its historical context.
+            </p>
+          )}
+          {native && (
+            <button
+              className="quiet-button"
+              disabled={working}
+              onClick={systemShare}
+            >
+              <Share2 size={15} />{' '}
+              {shareUrl ? 'Open share sheet' : 'Share route summary'}
+            </button>
+          )}
         </div>
       )}
+      {message && <p role="status">{message}</p>}
     </section>
   );
 }
