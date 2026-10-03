@@ -1,5 +1,7 @@
 # Product and engineering council: October 3
 
+This records the earlier review. The subsequent [navigation refinement](NAVIGATION_REFINEMENT.md) supersedes its local-only endpoint search and activity defaults with address search and default-on updates.
+
 Three independent agent reviews represented hackathon-judge, prospective-user and senior-engineering perspectives. The user review inspected desktop and mobile browser flows; these are usability observations, not a field user study.
 
 | Perspective | Finding | Agreed action |

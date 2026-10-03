@@ -2,7 +2,9 @@
 
 A BigRedHacks navigation project: compare walking routes using historical reported incidents and an explicit limit on added walking time. Inspired by our LATAM team's experiences, Brisa uses a shared routing engine with independently validated city data packages.
 
-![São Paulo walking route comparison: fastest, balanced and lower historical exposure choices](docs/screenshots/sao-paulo-desktop.jpg)
+![Brisa directions with searchable endpoints, walking alternatives and published activity bubbles](docs/screenshots/navigation-desktop.jpg)
+
+[See the mobile layout](docs/screenshots/navigation-mobile.jpg).
 
 **Included coverage:** four bounded packages. Coverage is regional; a city label does not imply every neighborhood is supported.
 
@@ -54,13 +56,15 @@ Available public data still needs a usable occurrence time, location, incident d
 
 ## What the planner does
 
-- Selects a city/coverage package, landmarks or map endpoints, a local historical time window, and an extra-time budget.
-- Searches bundled street/landmark names, supports keyboard map-center selection, and restores a ready-to-compare trip with **Try example walk**.
+- Starts with searchable **From** and **To** fields for addresses, places and streets inside the selected coverage area. Map selection and explicit **Use my location** are also available.
+- Combines bundled local search with bounded Photon address results. Arbitrary locations still need to be inside the loaded walking graph; this is not global routing.
+- Keeps historical time windows, detour budget, example reset and coverage/source information in **Advanced options**.
+- Presents controls, map and route choices in that order on mobile, with keyboard-accessible search and map selection.
 - Computes routes along real OpenStreetMap walking geometry and integrates the report index along each displayed path.
 - Shows distinct fastest/lower-index candidates that satisfy the exact budget, with time and distance alongside exposure comparisons.
 - Summarizes the selected route's tradeoff and explains which actual street sections differ from the fastest route.
 - Displays aggregate report context, package-specific dates, timezone, eligibility, sources and route explanations.
-- Offers an optional latest-activity bubble layer: unverified SF dispatch calls and delayed published NYC/Chicago reports, with source windows and freshness visible. It does not change historical route scores; São Paulo has no verified recent feed.
+- Shows a default-on, automatically refreshed activity bubble layer with an OFF option: unverified SF dispatch calls and delayed published NYC/Chicago reports, with source windows and freshness visible. It does not change historical route scores; São Paulo has no verified recent feed.
 - Shows contiguous street segments and four historical-window scores for the exact selected path.
 - Shares a reproducible request only after an explicit action. Links disclose both endpoint coordinates and recalculate on open; they do not guarantee permanently identical routes. Ordinary control changes do not write coordinates into the address bar.
 - Exports the selected geometry as GPX or its street sequence as text, with historical model/source context. These are planning references, not verified navigation instructions.
@@ -91,6 +95,8 @@ flowchart LR
 | Demo walkthrough | [docs/DEMO.md](docs/DEMO.md) | Two-minute demo and local fallback |
 | Pitch kit | [docs/PITCH.md](docs/PITCH.md) | Spoken pitch and factual submission draft |
 | Manual deployment | [docs/DEPLOY.md](docs/DEPLOY.md) | Publication instructions; not a claim of a live deployment |
+| Address search | [docs/PLACE_SEARCH.md](docs/PLACE_SEARCH.md) | Bounded geocoding, local fallback, provider configuration and query disclosure |
+| Navigation refinement | [docs/NAVIGATION_REFINEMENT.md](docs/NAVIGATION_REFINEMENT.md) | User-perspective reviews and the simpler mobile/desktop flow |
 | Latest activity | [docs/LIVE_ACTIVITY.md](docs/LIVE_ACTIVITY.md), [docs/RECENT_SOURCES.md](docs/RECENT_SOURCES.md) | Optional feeds, delays, bubble semantics and failure behavior |
 | Source methodology | [docs/DATA.md](docs/DATA.md) | Exact queries, filters, provenance and limitations |
 | City onboarding | [docs/ADDING_CITIES.md](docs/ADDING_CITIES.md) | Add a supported public API/CSV package |
@@ -106,11 +112,11 @@ A new city is a new data package, not a new application. Larger regional coverag
 
 ## Refresh and deployment
 
-With latest activity off (the default), committed packages make route demos independent of incident-source and Overpass APIs. Enabling latest activity requires network access to official feeds; failures never substitute fixture data. Historical-package refresh is an explicit build-time operation. Cache identities include source/query/configuration; failed downloads preserve the last valid cache. Historical raw case records stay in ignored local caches and are never served by the app. The optional activity layer fetches minimal official records transiently in the browser and displays aggregate bubbles.
+Committed packages make historical routing independent of incident-source and Overpass APIs. Latest activity starts ON and requires official-feed network access; switch it OFF for a network-independent historical demo. Address search contacts Photon while typing, with local places and map selection available as fallbacks. Feed failures never substitute fixture data. Historical-package refresh is an explicit build-time operation. Cache identities include source/query/configuration; failed downloads preserve the last valid cache. Historical raw case records stay in ignored local caches and are never served by the app. The optional activity layer fetches minimal official records transiently in the browser and displays aggregate bubbles.
 
 After changing data, run Python validation, `npm test`, and `npm run build`. Deploy the resulting `dist/` as one release so the catalog and its data packages stay consistent. Root hosting is the default; [GitHub Pages instructions](docs/DEPLOY.md) cover project paths through `BASE_PATH`. GitHub Actions checks packages, algorithms, workers, production build and browser flows, including automated accessibility checks.
 
-All `VITE_` values are public browser configuration. `.env.example` documents the optional tile URL; never put private credentials there. Follow the selected tile provider's attribution and usage rules. There is no bulk tile downloader or service worker.
+All `VITE_` values are public browser configuration. `.env.example` documents optional tile and Photon-compatible geocoder URLs; never put private credentials there. Follow the selected tile provider's attribution and usage rules. There is no bulk tile downloader or service worker.
 
 ## Attribution
 

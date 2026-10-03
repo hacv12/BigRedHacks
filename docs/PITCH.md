@@ -4,7 +4,7 @@
 
 **0:00–0:20 — Why.** “Our LATAM team's experiences inspired a question: what if a walking planner made local context visible alongside arrival time? Brisa compares walks using historical reported incidents and lets you decide how much extra walking time to allow.”
 
-**0:20–0:50 — Show one decision.** Open `/?area=sao-paulo-centro` and select **Try example walk**. Select a distinct lower-exposure route if available. Read its generated takeaway: the current example offers about two extra minutes for a 15% lower historical report index. “These lines follow real OpenStreetMap streets. Every displayed choice respects the extra-time budget.” Use actual returned values, not a memorized promise.
+**0:20–0:50 — Show one decision.** Open `/?area=sao-paulo-centro`, expand **Advanced options**, select **Try example walk**, then collapse the options. Select a distinct lower-exposure route if available. Read its generated takeaway: the current example offers about two extra minutes for a 15% lower historical report index. “These lines follow real OpenStreetMap streets. Every displayed choice respects the extra-time budget.” Use actual returned values, not a memorized promise.
 
 **0:50–1:20 — Show what changed.** Open **What changes from fastest?** “Here are the street sections shared by the walks, and the sections that differ. We explain the actual geometry, not an invented claim about why a street is safer.” Point to one named section and the highlighted path.
 
@@ -22,9 +22,9 @@ Our LATAM team's experiences made us interested in the local knowledge people us
 
 ### What it does
 
-Brisa compares walking routes inside bounded packages for Central Manhattan, Chicago's Loop, downtown San Francisco and São Paulo's Paulista–Centro area in Brazil. Choose endpoints, a historical local-time window and an extra-time budget. Select a route to inspect its geometry, contiguous street sequence and exposure across four windows on the same path. Explicit share links reproduce the request; GPX and text downloads preserve the selected walk and its context.
+Brisa compares walking routes inside bounded packages for Central Manhattan, Chicago's Loop, downtown San Francisco and São Paulo's Paulista–Centro area in Brazil. Type addresses, places or streets in From/To and select a suggestion; local map references and explicit device location are also available. Historical time windows and the extra-time budget live in Advanced options. Select a route to inspect its geometry, contiguous street sequence and exposure across four windows on the same path. Explicit share links reproduce the request; GPX and text downloads preserve the selected walk and its context.
 
-An optional latest-activity layer adds aggregate bubbles without changing historical route scores. SF uses selected unverified dispatch calls from the past 48 hours, refreshed by the source every ten minutes with an additional ten-minute delay. NYC and Chicago show 30-day windows ending on their latest published occurrence dates: NYC releases quarterly; Chicago updates daily and omits at least the latest seven days. São Paulo has no verified recent feed. Activity requires network access and has explicit failure states, not fixture fallback.
+A default-on activity layer with an OFF option adds automatically refreshed aggregate bubbles without changing historical route scores. SF uses selected unverified dispatch calls from the past 48 hours, refreshed by the source every ten minutes with an additional ten-minute delay. NYC and Chicago show 30-day windows ending on their latest published occurrence dates: NYC releases quarterly; Chicago updates daily and omits at least the latest seven days. São Paulo has no verified recent feed. Activity requires network access and has explicit failure states, not fixture fallback.
 
 ### How we built it
 
@@ -44,7 +44,7 @@ Audit walking access with local users; test category weights and smoothing sensi
 
 ### Built with
 
-React, TypeScript, Vite, Leaflet, Web Workers, Python, OpenStreetMap, NYC Open Data, Chicago Data Portal, DataSF, SSP-SP, Vitest and Playwright.
+React, TypeScript, Vite, Leaflet, Web Workers, Python, OpenStreetMap, NYC Open Data, Chicago Data Portal, DataSF, SSP-SP, Photon, Vitest and Playwright.
 
 ## Submission notes
 

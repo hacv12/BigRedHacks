@@ -7,21 +7,21 @@ npm ci
 npm run dev
 ```
 
-Open the printed local URL. NYC is the app default. For the LATAM demo, open `/?area=sao-paulo-centro`; `/?area=chicago-loop` and `/?area=sf-downtown` select the other packages. Prepare dependencies before the event. The committed graph, aggregate packages and fonts work from the local server; optional background map tiles use the network. With latest activity off (the default), the core demo makes no incident-source or Overpass requests. Enabling activity requires official-source network access.
+Open the printed local URL. NYC is the app default. For the LATAM demo, open `/?area=sao-paulo-centro`; `/?area=chicago-loop` and `/?area=sf-downtown` select the other packages. Prepare dependencies before the event. The committed graph, aggregate packages and fonts work from the local server; optional background map tiles use the network. Activity bubbles start ON and use official-source network access where a feed exists. Turn them OFF for a historical-only demo. Address autocomplete uses Photon; bundled place names and map selection remain available when it is unavailable.
 
 ## Two-minute working demo
 
-1. **0:00 — Start one real decision.** Open São Paulo and select **Try example walk** to restore Edifício Copan → Praça da Sé, noon–6 pm and an eight-minute budget. Introduce the team's LATAM motivation: comparing historical report context alongside walking time.
+1. **0:00 — Start one real decision.** Open São Paulo, expand **Advanced options** and select **Try example walk** to restore Edifício Copan → Praça da Sé, noon–6 pm and an eight-minute budget. Collapse Advanced options. Point out the editable From/To fields and introduce the team's LATAM motivation: comparing historical report context alongside walking time.
 2. **0:20 — Choose the tradeoff.** Select Fastest walk, then a distinct lower-exposure choice if available. Read the generated takeaway rather than doing mental arithmetic. The current example is about two extra minutes for a 15% lower historical report index (20.30 versus 22.53 minutes, 14.89% unrounded). Use actual displayed values after any model/data change. A distinct alternative is not promised for every request.
 3. **0:50 — Make the detour concrete.** Open **What changes from fastest?** Show the measured shared/different street sections and the named sections on each walk. Names describe where geometry differs, not why incidents occurred or whether a street is accessible, well lit or safe. Different sections can have the same street name.
 4. **1:20 — Make the choice portable.** Select **Share trip**, show the endpoint-coordinate disclosure and generated link. Explain that opening it recalculates the request; GPX preserves selected geometry. Keep copying, reopening and downloading for questions.
-5. **1:40 — State scope.** Show coverage and conclude: “São Paulo uses 2,466 eligible pedestrian cellphone theft/robbery reports with known times. Missing times introduce bias. This compares historical report indices, not personal safety or cities.” Leave the selected walk on screen.
+5. **1:40 — State scope.** Use the map’s **Show coverage boundary** control and conclude: “São Paulo uses 2,466 eligible pedestrian cellphone theft/robbery reports with known times. Missing times introduce bias. This compares historical report indices, not personal safety or cities.” Leave the selected walk on screen.
 
 ## Optional questions and demonstrations
 
-- **Does the budget matter?** Set the extra-time budget to zero and compare. Restore the example with Try example walk. Do not imply every budget returns three routes.
-- **Does time change the explanation?** Show Same walk, different windows: four historical scores for the exact selected geometry. These are not current predictions.
-- **Can I choose another street?** Use the bundled street search. It needs no external geocoder; results are limited to named sections in the loaded graph, not street addresses or entrances.
+- **Does the budget matter?** Expand **Advanced options**, set the extra-time budget to zero and compare. Restore the example with Try example walk. Do not imply every budget returns three routes.
+- **Does time change the explanation?** Expand **Route details**, then show Same walk, different windows: four historical scores for the exact selected geometry. These are not current predictions.
+- **Can I choose another street?** Type in **From** or **To**. Suggestions combine bundled street/landmark names with Photon addresses and places, bounded to the selected area. Select a result before comparing; map pins and explicit device location are alternatives. Places outside loaded coverage cannot be routed.
 - **Can I take it with me?** Open the shared link or download GPX/summary. Street sequences are planning references, not verified turn instructions.
 - **What has updated recently?** Use the separate SF segment below, with network access. It does not modify the historical routing model.
 
@@ -31,7 +31,7 @@ Actual app captures are available for the presentation: [desktop comparison](scr
 
 ## Optional 30-second activity segment
 
-After the Brazil walkthrough, switch to San Francisco and enable latest activity. Show an aggregate bubble and the source dates. Say: “These are selected, unverified police dispatch calls received during the last 48 hours. The source updates every ten minutes with an additional ten-minute delay. They do not change the historical route scores.” Do not promise a fixed count or current street conditions. If loading fails, show the explicit error/stale state and continue the historical demo; there is no fixture fallback.
+After the Brazil walkthrough, switch to San Francisco. Activity is already ON unless you turned it off; the OFF choice persists across city changes. Open **Activity details** or tap a bubble. Show an aggregate bubble and the source dates. Say: “These are selected, unverified police dispatch calls received during the last 48 hours. The source updates every ten minutes with an additional ten-minute delay; Brisa checks for newly published batches every minute while visible. They do not change the historical route scores.” Do not promise a fixed count or current street conditions. If loading fails, show the explicit error/stale state and continue the historical demo; there is no fixture fallback.
 
 ![San Francisco dispatch-call bubbles with a selected approximate cell and source context](screenshots/latest-activity.jpg)
 
@@ -59,7 +59,7 @@ São Paulo's MASP landmark is named **MASP · Paulista sidewalk**. Its reviewed 
 ## If the demo network fails
 
 - Keep the local Vite server running and reload the local app. Bundled streets and routes remain available when background tile requests fail; the app shows a map-unavailable explanation.
-- If dependencies are already installed, `npm run build` followed by `npm run preview` serves the production bundle locally. Open the URL that command prints. The historical route demo needs no incident API or Google key; leave latest activity off without network access.
+- If dependencies are already installed, `npm run build` followed by `npm run preview` serves the production bundle locally. Open the URL that command prints. The historical route demo needs no incident API or Google key; turn latest activity OFF without network access and use bundled places or map selection.
 - Do not refresh source data at the event. The committed packages are the demo inputs; ingestion is a separate operation.
 - If a package load fails, use Try again or switch coverage. Invalid shared links show a notice and fall back to default landmarks. Identical endpoints and points outside supported street coverage produce recoverable errors.
 - The app is not a service-worker offline install. A remote deployment must load its assets and selected package first; a prepared local server is the dependable network fallback.
