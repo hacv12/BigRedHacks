@@ -7,7 +7,7 @@ npm ci
 npm run dev
 ```
 
-Open the printed local URL. NYC is the app default. For the LATAM demo, open `/?area=sao-paulo-centro`; `/?area=chicago-loop` and `/?area=sf-downtown` select the other packages. Prepare dependencies before the event. The committed graph, aggregate packages and fonts work from the local server; optional background map tiles use the network. There are no live incident-source or Overpass requests during the demo.
+Open the printed local URL. NYC is the app default. For the LATAM demo, open `/?area=sao-paulo-centro`; `/?area=chicago-loop` and `/?area=sf-downtown` select the other packages. Prepare dependencies before the event. The committed graph, aggregate packages and fonts work from the local server; optional background map tiles use the network. With latest activity off (the default), the core demo makes no incident-source or Overpass requests. Enabling activity requires official-source network access.
 
 ## Two-minute working demo
 
@@ -22,6 +22,16 @@ For a spoken script and submission draft, use [PITCH.md](PITCH.md).
 
 Actual app captures are available for the presentation: [desktop comparison](screenshots/sao-paulo-desktop.jpg) and [mobile map](screenshots/sao-paulo-mobile.jpg). They show the committed São Paulo demo, with OpenStreetMap attribution retained; they do not establish a public deployment or current street conditions.
 
+## Optional 30-second activity segment
+
+After the Brazil walkthrough, switch to San Francisco and enable latest activity. Show an aggregate bubble and the source dates. Say: “These are selected, unverified police dispatch calls received during the last 48 hours. The source updates every ten minutes with an additional ten-minute delay. They do not change the historical route scores.” Do not promise a fixed count or current street conditions. If loading fails, show the explicit error/stale state and continue the historical demo; there is no fixture fallback.
+
+![San Francisco dispatch-call bubbles with a selected approximate cell and source context](screenshots/latest-activity.jpg)
+
+This screenshot captures the live-source response observed on October 3, 2026; counts and source dates will change.
+
+NYC instead shows 30 calendar days ending on its latest published occurrence date, from a quarterly source. Chicago uses the same latest-published window with daily updates that omit at least the newest seven days. São Paulo has no verified recent feed. See [LIVE_ACTIVITY.md](LIVE_ACTIVITY.md) and [RECENT_SOURCES.md](RECENT_SOURCES.md).
+
 ## Included packages
 
 Counts below describe the committed snapshots, not live incident totals. All use 2025 historical reports.
@@ -35,14 +45,14 @@ Counts below describe the committed snapshots, not live incident totals. All use
 
 **Count units:** The US counts are retrieved source rows. São Paulo’s 32,552 count is distinct latest-version reports with coordinates in the incident halo, not workbook rows. The complete workbook contains 383,635 physical data rows and 309,326 distinct publisher report keys; repeated phone/person/offense rows are deduplicated before aggregation. Of the halo reports, 19,217 with missing or imprecise occurrence times are excluded under the timestamp eligibility rule. This known-time subset can introduce time-reporting bias; it is not representative general-crime coverage.
 
-NYC is a rectangle from Battery Park through Columbus Circle; Chicago covers the Loop; SF covers a downtown rectangle; São Paulo covers a Paulista–Centro rectangle. None represents its entire city. Eligibility follows source-specific rules. SF is explicitly limited to street/public-place robbery; a small count does not establish a safer city. São Paulo includes pedestrian cellphone theft/robbery only. Raw case records are not served by the app.
+NYC is a rectangle from Battery Park through Columbus Circle; Chicago covers the Loop; SF covers a downtown rectangle; São Paulo covers a Paulista–Centro rectangle. None represents its entire city. Eligibility follows source-specific rules. SF is explicitly limited to street/public-place robbery; a small count does not establish a safer city. São Paulo includes pedestrian cellphone theft/robbery only. Historical raw case records are not bundled. The optional activity layer fetches minimal official records transiently and displays aggregates.
 
 São Paulo's MASP landmark is named **MASP · Paulista sidewalk**. Its reviewed surface-sidewalk OSM node avoids the geometrically closer Nove de Julho tunnel; it is not a verified museum entrance or a general street-access audit. See [DATA.md](DATA.md) for source and geometry checks.
 
 ## If the demo network fails
 
 - Keep the local Vite server running and reload the local app. Bundled streets and routes remain available when background tile requests fail; the app shows a map-unavailable explanation.
-- If dependencies are already installed, `npm run build` followed by `npm run preview` serves the production bundle locally. Open the URL that command prints. No incident API or Google key is needed.
+- If dependencies are already installed, `npm run build` followed by `npm run preview` serves the production bundle locally. Open the URL that command prints. The historical route demo needs no incident API or Google key; leave latest activity off without network access.
 - Do not refresh source data at the event. The committed packages are the demo inputs; ingestion is a separate operation.
 - If a package load fails, use Try again or switch coverage. Invalid shared links show a notice and fall back to default landmarks. Identical endpoints and points outside supported street coverage produce recoverable errors.
 - The app is not a service-worker offline install. A remote deployment must load its assets and selected package first; a prepared local server is the dependable network fallback.
@@ -63,4 +73,4 @@ Run `npm test`, `python3 scripts/test_data.py`, `npm run build`, and `npm run te
 
 **Can you add my city?** Compatible public data can become a new package using [Adding cities](ADDING_CITIES.md). A usable location, occurrence time, incident definition, source rights and street graph are prerequisites. São Paulo Paulista–Centro is the current LATAM package. Other LATAM jurisdictions require their own source evaluation; this does not imply region-wide coverage.
 
-**Is it live?** Historical packages are bundled. Publication is a separate manual step described in [DEPLOY.md](DEPLOY.md); do not claim a public deployment before it exists.
+**Is it live?** Historical routing packages are bundled. The optional SF activity layer updates from delayed, unverified dispatch calls; NYC/Chicago show delayed published reports. This is not live crime confirmation. Publication is a separate manual step described in [DEPLOY.md](DEPLOY.md); do not claim a public deployment before it exists.

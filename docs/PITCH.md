@@ -24,6 +24,8 @@ Our LATAM team's experiences made us interested in the local knowledge people us
 
 Brisa compares walking routes inside bounded packages for Central Manhattan, Chicago's Loop, downtown San Francisco and São Paulo's Paulista–Centro area in Brazil. Choose endpoints, a historical local-time window and an extra-time budget. Select a route to inspect its geometry, contiguous street sequence and exposure across four windows on the same path. Explicit share links reproduce the request; GPX and text downloads preserve the selected walk and its context.
 
+An optional latest-activity layer adds aggregate bubbles without changing historical route scores. SF uses selected unverified dispatch calls from the past 48 hours, refreshed by the source every ten minutes with an additional ten-minute delay. NYC and Chicago show 30-day windows ending on their latest published occurrence dates: NYC releases quarterly; Chicago updates daily and omits at least the latest seven days. São Paulo has no verified recent feed. Activity requires network access and has explicit failure states, not fixture fallback.
+
 ### How we built it
 
 A Python pipeline normalizes publisher-specific incident records, produces aggregate cells and imports OpenStreetMap walking graphs. TypeScript validates packages before use. A React interface sends planning work to a Web Worker, where graph searches compare walking time with a historical-report index sampled along the displayed geometry. The planner shows at most three distinct candidates within the budget. No paid routing API, account or application backend is required.
@@ -46,4 +48,4 @@ React, TypeScript, Vite, Leaflet, Web Workers, Python, OpenStreetMap, NYC Open D
 
 ## Submission notes
 
-Use the current local app for screenshots and record the actual returned choices. Do not describe Brisa as a deployed service unless a deployment has been completed. [Manual deployment instructions](DEPLOY.md) are separate from a live URL. See [DEMO.md](DEMO.md) for rehearsal and fallback steps; source details remain in [DATA.md](DATA.md).
+Use the current local app for screenshots and record the actual returned choices. Do not describe Brisa as a deployed service unless a deployment has been completed. [Manual deployment instructions](DEPLOY.md) are separate from a live URL. See [DEMO.md](DEMO.md) for rehearsal and fallback steps; historical source details remain in [DATA.md](DATA.md). See [LIVE_ACTIVITY.md](LIVE_ACTIVITY.md) and [RECENT_SOURCES.md](RECENT_SOURCES.md) for the optional activity layer; [DEMO.md](DEMO.md) includes a separate 30-second SF segment.
