@@ -1,0 +1,30 @@
+Self-hosted DM Sans and Manrope
+Downloaded from official Google Fonts services on 2026-10-03.
+Unmodified variable WOFF2 Latin and Latin Extended subsets.
+DM Sans CSS weight range: 400–700; Manrope: 400–800.
+SIL Open Font License 1.1: see each adjacent OFL file.
+CSS provenance: https://fonts.googleapis.com/css2?family=DM+Sans:wght@400..700&family=Manrope:wght@400..800&display=swap
+
+dmsans-latin-ext-variable.woff2
+https://fonts.gstatic.com/s/dmsans/v17/rP2Yp2ywxg089UriI5-g4vlH9VoD8Cmcqbu6-K6z9mXgjU0.woff2
+18192 bytes; SHA256 219b02c7d8884817d3d6ad4c8771f2c000ce4c5669a67ef4e2e5617ffa25c4cc
+
+dmsans-latin-variable.woff2
+https://fonts.gstatic.com/s/dmsans/v17/rP2Yp2ywxg089UriI5-g4vlH9VoD8Cmcqbu0-K6z9mXg.woff2
+36980 bytes; SHA256 468d56b6b25b05b70190b6c233d773f6f1770e8579827ce022a57f03fa8002fb
+
+manrope-latin-ext-variable.woff2
+https://fonts.gstatic.com/s/manrope/v20/xn7gYHE41ni1AdIRggmxSvfedN62Zw.woff2
+15240 bytes; SHA256 ce093b341d9c10658ee1eaa85c5f8042ff3307bc6ccfc5f405616eb437f0009e
+
+manrope-latin-variable.woff2
+https://fonts.gstatic.com/s/manrope/v20/xn7gYHE41ni1AdIRggexSvfedN4.woff2
+24576 bytes; SHA256 e310b55a7fd9677f5e3555e6c6c4d064fa1f1d24393f0ddbe217cea12a8c432f
+
+dmsans-OFL.txt
+https://raw.githubusercontent.com/google/fonts/main/ofl/dmsans/OFL.txt
+4482 bytes; SHA256 9af36190332437f5ecd09974de43c1f7c77a310a996cdd8ceb25628b458840e1
+
+manrope-OFL.txt
+https://raw.githubusercontent.com/google/fonts/main/ofl/manrope/OFL.txt
+4387 bytes; SHA256 58172e0c0fac2cda8a37b348164bb55e44b0e69051e557e92b1d3f6910141f7b

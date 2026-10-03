@@ -67,6 +67,39 @@ describe('opt-in trip links', () => {
     expect(encoded).not.toContain('#');
     expect(new URL(encoded).origin).toBe(new URL(base).origin);
   });
+  it.each([1e-7, -1.2345678901234567e-20, 1e-300, Number.MIN_VALUE, -0])(
+    'roundtrips tiny coordinates as strict decimals without precision loss: %s',
+    (value) => {
+      const tiny: SharedTrip = {
+        ...trip,
+        request: {
+          ...trip.request,
+          origin: [value, -value],
+          destination: [-value, value],
+          maxExtraMinutes: 1e-7,
+        },
+      };
+      const encoded = encodeTripUrl(base, tiny);
+      const params = new URL(encoded).searchParams;
+      for (const key of ['origin', 'destination', 'detour'])
+        for (const coordinate of params.get(key)!.split(','))
+          expect(coordinate).toMatch(/^-?\d+(?:\.\d+)?$/);
+      expect(
+        parseTripUrl(encoded, [{ ...areas[0], bounds: [-1, -1, 1, 1] }]),
+      ).toEqual(tiny);
+    },
+  );
+  it.each([NaN, Infinity, -Infinity])(
+    'rejects nonfinite outgoing coordinates: %s',
+    (value) => {
+      expect(() =>
+        encodeTripUrl(base, {
+          ...trip,
+          request: { ...trip.request, origin: [value, 0] },
+        }),
+      ).toThrow();
+    },
+  );
   it('leaves legacy area-only links to the existing area loader', () => {
     expect(parseTripUrl(`${base}?area=nyc-manhattan`, areas)).toBeNull();
   });
@@ -126,6 +159,50 @@ describe('opt-in trip links', () => {
   });
 });
 describe('selected route exports', () => {
+  it.each([1e-7, -1.2345678901234567e-20, 1e-300, Number.MIN_VALUE, -0])(
+    'writes GPX decimal coordinates with exact numeric roundtrip: %s',
+    (value) => {
+      const selected: PlannedRoute = {
+        ...route,
+        coordinates: [
+          [value, -value],
+          [-value, value],
+        ],
+      };
+      const gpx = exportRouteGpx(selected, context);
+      const points = [
+        ...gpx.matchAll(/<trkpt lat="([^"]+)" lon="([^"]+)"\/>/g),
+      ];
+      expect(points).toHaveLength(2);
+      points.forEach((match, index) => {
+        expect(match[1]).toMatch(/^-?\d+(?:\.\d+)?$/);
+        expect(match[2]).toMatch(/^-?\d+(?:\.\d+)?$/);
+        expect(
+          Object.is(Number(match[2]), selected.coordinates[index][0]),
+        ).toBe(true);
+        expect(
+          Object.is(Number(match[1]), selected.coordinates[index][1]),
+        ).toBe(true);
+      });
+    },
+  );
+  it.each([NaN, Infinity, -Infinity])(
+    'rejects nonfinite GPX vertices: %s',
+    (value) => {
+      expect(() =>
+        exportRouteGpx(
+          {
+            ...route,
+            coordinates: [
+              [value, 0],
+              [0, 0],
+            ],
+          },
+          context,
+        ),
+      ).toThrow();
+    },
+  );
   it('exports exact selected WGS84 geometry in traversal order and historical context', () => {
     const gpx = exportRouteGpx(route, context);
     expect(gpx).toContain('xmlns="http://www.topografix.com/GPX/1/1"');

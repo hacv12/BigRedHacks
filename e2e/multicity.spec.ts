@@ -95,7 +95,10 @@ test('switches both ways and resets custom endpoints and route settings', async 
   await page.goto('/');
   await routesReady(page);
   await page.getByRole('button', { name: 'Choose origin on map' }).click();
-  await page.locator('.map-canvas').click({ position: { x: 180, y: 240 } });
+  const mapBox = await page.locator('.map-canvas').boundingBox();
+  await page
+    .locator('.map-canvas')
+    .click({ position: { x: mapBox!.width / 2, y: mapBox!.height / 2 } });
   await expect(page.locator('#origin')).toHaveValue('custom');
   await page.getByLabel('Historical time window').selectOption('3');
   await page.getByLabel('Room for a detour').fill('13');

@@ -14,10 +14,20 @@ import {
   LocateFixed,
   MapPin,
   Navigation,
+  Scan,
   X,
 } from 'lucide-react';
 import { createRoutePlanner } from './domain/planner-client';
 import { loadCatalog, loadDataset } from './data/loaders';
+import WalkDetails from './components/WalkDetails';
+import {
+  encodeTripUrl,
+  parseTripUrl,
+  routePreference,
+  selectSharedRoute,
+  type SharedTrip,
+  type RoutePreference,
+} from './domain/trip-tools';
 import type {
   BucketIndex,
   CityDataset,
@@ -40,6 +50,7 @@ export default function App() {
   const generation = useRef(0);
   const planGeneration = useRef(0);
   const planner = useRef<ReturnType<typeof createRoutePlanner> | null>(null);
+  const incomingTrip = useRef<SharedTrip | null>(null);
   const area = catalog?.areas.find((item) => item.id === areaId);
   const windows = data?.manifest.timeBuckets ?? [];
   const period = data
@@ -89,6 +100,26 @@ export default function App() {
       },
     );
   }
+  function showCoverage() {
+    if (!map.current || !data) return;
+    const [west, south, east, north] = data.manifest.planningBounds;
+    map.current.fitBounds(
+      [
+        [south, west],
+        [north, east],
+      ],
+      {
+        paddingTopLeft: [30, 105],
+        paddingBottomRight: [60, 115],
+        animate: false,
+      },
+    );
+    mapEl.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  function showRouteMap() {
+    setFit((value) => value + 1);
+    mapEl.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
   const pickRef = useRef(picking);
   pickRef.current = picking;
   const [plannedPoints, setPlannedPoints] = useState<{
@@ -109,6 +140,7 @@ export default function App() {
     end: LngLat,
     time = bucket,
     extra = budget,
+    preference?: RoutePreference,
   ) {
     const currentPlanner = planner.current;
     if (!currentPlanner) return;
@@ -132,7 +164,12 @@ export default function App() {
       )
         return;
       setResult(comparison);
-      setSelected(comparison.routes.at(-1)?.id ?? '');
+      setSelected(
+        (preference
+          ? selectSharedRoute(comparison.routes, preference)
+          : comparison.routes.at(-1)
+        )?.id ?? '',
+      );
       setDirty(false);
       setPlannedPoints({ origin: start, destination: end });
       setFit((v) => v + 1);
@@ -168,10 +205,26 @@ export default function App() {
         const requested = new URL(window.location.href).searchParams.get(
           'area',
         );
+        try {
+          incomingTrip.current = parseTripUrl(window.location.href, next.areas);
+          if (incomingTrip.current)
+            setNotice(
+              'Shared trip loaded. Routes are recalculated from this snapshot.',
+            );
+        } catch {
+          incomingTrip.current = null;
+          setNotice(
+            'Shared trip could not be loaded. Showing the default landmarks; you can plan a new walk.',
+          );
+        }
         const chosen =
           next.areas.find((item) => item.id === requested)?.id ??
           next.defaultAreaId;
-        if (requested && requested !== chosen)
+        if (
+          requested &&
+          requested !== chosen &&
+          !new URL(window.location.href).searchParams.has('trip')
+        )
           setNotice(
             'That coverage area is unavailable. Showing the default supported area.',
           );
@@ -220,6 +273,10 @@ export default function App() {
     const current = generation.current;
     const controller = new AbortController();
     const url = new URL(window.location.href);
+    // Coordinates enter the URL only through an explicit share action. Consume
+    // incoming links without keeping trip coordinates in the browsing address.
+    url.search = '';
+    url.hash = '';
     url.searchParams.set('area', area.id);
     window.history.replaceState(null, '', url);
     loadDataset(area, controller.signal)
@@ -234,9 +291,40 @@ export default function App() {
         const end = dataset.landmarks.find(
           (item) => item.id === area.defaultDestinationId,
         )!;
-        setOrigin(start.id);
-        setDestination(end.id);
-        void compute(dataset, start.point, end.point, 2, 8);
+        const shared =
+          incomingTrip.current?.areaId === area.id
+            ? incomingTrip.current
+            : null;
+        incomingTrip.current = null;
+        if (shared) {
+          const request = shared.request;
+          const match = (point: LngLat) =>
+            dataset.landmarks.find((landmark) =>
+              landmark.point.every((n, i) => Math.abs(n - point[i]) < 1e-8),
+            );
+          const a = match(request.origin),
+            b = match(request.destination);
+          setOrigin(a?.id ?? 'custom');
+          setDestination(b?.id ?? 'custom');
+          setCustom({
+            ...(!a ? { origin: request.origin } : {}),
+            ...(!b ? { destination: request.destination } : {}),
+          });
+          setBucket(request.bucket);
+          setBudget(request.maxExtraMinutes);
+          void compute(
+            dataset,
+            request.origin,
+            request.destination,
+            request.bucket,
+            request.maxExtraMinutes,
+            shared.preference,
+          );
+        } else {
+          setOrigin(start.id);
+          setDestination(end.id);
+          void compute(dataset, start.point, end.point, 2, 8);
+        }
       })
       .catch((e) => {
         if (controller.signal.aborted || current !== generation.current) return;
@@ -460,7 +548,11 @@ export default function App() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <a href="/" className="brand" aria-label="Brisa home">
+        <a
+          href={import.meta.env.BASE_URL}
+          className="brand"
+          aria-label="Brisa home"
+        >
           <span className="brand-symbol">
             <Navigation size={23} fill="currentColor" />
           </span>
@@ -507,6 +599,7 @@ export default function App() {
                   id="coverage-area"
                   value={areaId}
                   onChange={(event) => {
+                    incomingTrip.current = null;
                     resetCity();
                     setNotice('');
                     setAreaId(event.target.value);
@@ -522,9 +615,20 @@ export default function App() {
               </div>
               <p className="coverage-description">{area?.description}</p>
               {data && (
-                <p className="coverage-source">
-                  Source: {data.manifest.sourceName}
-                </p>
+                <>
+                  <p className="coverage-source">
+                    Source: {data.manifest.sourceName}
+                  </p>
+                  <div className="coverage-meta">
+                    <span>
+                      {data.manifest.eligibleReportCount.toLocaleString()}{' '}
+                      eligible reports · {period}
+                    </span>
+                    <button className="quiet-button" onClick={showCoverage}>
+                      <Scan size={14} /> Show coverage
+                    </button>
+                  </div>
+                </>
               )}
               {notice && (
                 <p role="status" className="source-note">
@@ -581,9 +685,7 @@ export default function App() {
                             }}
                           >
                             {custom[key] && (
-                              <option value="custom">
-                                Point selected on map
-                              </option>
+                              <option value="custom">Custom location</option>
                             )}
                             {data.landmarks.map((l) => (
                               <option key={l.id} value={l.id}>
@@ -599,7 +701,11 @@ export default function App() {
                         type="button"
                         aria-label={`Choose ${key} on map`}
                         title={`Choose ${key} on map`}
-                        onClick={() => setPicking(picking === key ? null : key)}
+                        onClick={() => {
+                          setError('');
+                          setPicking(picking === key ? null : key);
+                          if (picking !== key) showCoverage();
+                        }}
                       >
                         <MapPin size={17} />
                       </button>
@@ -746,7 +852,7 @@ export default function App() {
                             ? 'Baseline index'
                             : r.reductionPercent === null
                               ? 'Index unavailable'
-                              : `${Math.round(r.reductionPercent)}% lower`}
+                              : `${r.reductionPercent > 0 && r.reductionPercent < 1 ? '<1' : Math.round(r.reductionPercent)}% lower`}
                           <small>
                             {i === 0 ? 'Fastest route' : 'modeled exposure'}
                           </small>
@@ -771,6 +877,29 @@ export default function App() {
                     snapshot, not across cities.
                   </span>
                 </p>
+                {route && area && plannedPoints && (
+                  <WalkDetails
+                    key={`${area.id}:${route.id}:${bucket}:${budget}`}
+                    route={route}
+                    manifest={data.manifest}
+                    bucket={bucket}
+                    budget={budget}
+                    showMap={showRouteMap}
+                    createShareUrl={() =>
+                      encodeTripUrl(window.location.href, {
+                        areaId: area.id,
+                        cityId: area.cityId,
+                        request: {
+                          origin: plannedPoints.origin,
+                          destination: plannedPoints.destination,
+                          bucket,
+                          maxExtraMinutes: budget,
+                        },
+                        preference: routePreference(route),
+                      })
+                    }
+                  />
+                )}
               </section>
             </>
           )}
@@ -818,14 +947,24 @@ export default function App() {
               <button
                 onClick={() => setFit((v) => v + 1)}
                 aria-label="Fit routes to map"
+                title="Fit routes to map"
+                disabled={!route}
               >
                 <LocateFixed size={19} />
+              </button>
+              <button
+                onClick={showCoverage}
+                aria-label="Show coverage boundary"
+                title="Show coverage boundary"
+              >
+                <Scan size={19} />
               </button>
             </div>
           )}
           {picking && (
-            <div className="pick-banner" role="status">
-              Click the map to choose your {picking}.
+            <div className="pick-banner" role={error ? 'alert' : 'status'}>
+              {error ||
+                `Zoom in and choose a street for your ${picking}, inside the dotted boundary.`}
               <button
                 aria-label="Cancel map selection"
                 onClick={() => setPicking(null)}
@@ -872,11 +1011,20 @@ export default function App() {
             </div>
           )}
           {route && (
-            <div className="route-map-label">
+            <button
+              className="route-map-label"
+              onClick={() =>
+                document
+                  .querySelector('.results')
+                  ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              }
+              aria-label="View selected walk details"
+            >
               <Footprints size={16} />
               <strong>{Math.ceil(route.minutes)} min</strong>
               <span>· {distance(route.meters)}</span>
-            </div>
+              <ArrowRight size={14} />
+            </button>
           )}
         </section>
       </main>
@@ -929,7 +1077,7 @@ export default function App() {
               windows use {data.manifest.timezone}.{' '}
               {data.manifest.eligibleReportCount.toLocaleString()} eligible
               reports from {data.manifest.sourceReportCount.toLocaleString()}{' '}
-              source reports.
+              source records.
             </p>
             <p>
               <a
@@ -967,11 +1115,14 @@ export default function App() {
               lighting, or accessibility. Street access tags are not a sidewalk
               or crossing audit.
             </p>
-            {data.manifest.notes.map((n, i) => (
-              <p key={i} className="source-note">
-                {n}
-              </p>
-            ))}
+            <details className="provenance-details">
+              <summary>Source filters, limitations & provenance</summary>
+              {data.manifest.notes.map((n, i) => (
+                <p key={i} className="source-note">
+                  {n}
+                </p>
+              ))}
+            </details>
             {result && (
               <p>
                 Street snaps: start {Math.round(result.originSnapMeters)} m;

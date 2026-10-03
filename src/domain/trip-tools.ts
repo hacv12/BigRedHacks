@@ -38,6 +38,21 @@ const decimal = /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/;
 const invalid = (): never => {
   throw new Error('This shared trip link is incomplete or invalid.');
 };
+/** Expand the shortest roundtripping number string; never round route vertices. */
+function decimalText(value: number): string {
+  if (!Number.isFinite(value)) return invalid();
+  if (Object.is(value, -0)) return '-0';
+  const text = String(value);
+  if (!/[eE]/.test(text)) return text;
+  const sign = value < 0 ? '-' : '';
+  const [coefficient, exponent] = Math.abs(value).toString().split('e');
+  const digits = coefficient.replace('.', '');
+  const position = coefficient.split('.')[0].length + Number(exponent);
+  if (position <= 0) return `${sign}0.${'0'.repeat(-position)}${digits}`;
+  if (position >= digits.length)
+    return `${sign}${digits}${'0'.repeat(position - digits.length)}`;
+  return `${sign}${digits.slice(0, position)}.${digits.slice(position)}`;
+}
 function point(value: string | null): LngLat {
   if (!value) return invalid();
   const parts = value.split(',');
@@ -133,10 +148,10 @@ export function encodeTripUrl(baseUrl: string, trip: SharedTrip): string {
   p.set('area', trip.areaId);
   p.set('trip', '1');
   p.set('city', trip.cityId);
-  p.set('origin', trip.request.origin.join(','));
-  p.set('destination', trip.request.destination.join(','));
+  p.set('origin', trip.request.origin.map(decimalText).join(','));
+  p.set('destination', trip.request.destination.map(decimalText).join(','));
   p.set('bucket', String(trip.request.bucket));
-  p.set('detour', String(trip.request.maxExtraMinutes));
+  p.set('detour', decimalText(trip.request.maxExtraMinutes));
   if (trip.preference !== undefined) p.set('route', trip.preference);
   parseParams(p);
   return url.toString();
@@ -185,7 +200,7 @@ const xml = (value: string) =>
     );
 function contextText(context: RouteExportContext): string {
   const m = context.manifest;
-  return `${m.city} / ${m.district}; dataset ${m.datasetId}; historical reports ${m.periodStart} to ${m.periodEnd}; model ${m.modelVersion}; window ${m.timeBuckets[context.bucket]} (${m.timezone}); extra walking budget ${context.maxExtraMinutes} min. Historical modeled exposure is not a safety prediction. Street geometry is a planning reference, not turn-by-turn navigation. Shared requests are recalculated and results may change.`;
+  return `${m.city} / ${m.district}; dataset ${m.datasetId}; historical reports ${m.periodStart} to ${m.periodEnd}; model ${m.modelVersion}; window ${m.timeBuckets[context.bucket]} (${m.timezone}); extra walking budget ${context.maxExtraMinutes} min. Historical modeled exposure is not a safety prediction. Street geometry is a planning reference, not turn-by-turn navigation. Shared requests are recalculated and results may change. Incident source: ${m.sourceName} (${m.sourceUrl}). Streets: © OpenStreetMap contributors, ODbL 1.0, https://www.openstreetmap.org/copyright.`;
 }
 export function exportRouteText(
   route: PlannedRoute,
@@ -210,8 +225,9 @@ export function exportRouteGpx(
 ): string {
   if (route.coordinates.length < 2)
     throw new Error('Route geometry is missing.');
-  for (const coordinates of route.coordinates) point(coordinates.join(','));
+  for (const coordinates of route.coordinates)
+    point(coordinates.map(decimalText).join(','));
   const description = xml(contextText(context));
   const time = (context.generatedAt ?? new Date()).toISOString();
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Brisa" xmlns="http://www.topografix.com/GPX/1/1">\n  <metadata><name>${xml(route.label)}</name><desc>${description}</desc><time>${time}</time></metadata>\n  <trk><name>${xml(route.label)}</name><desc>${description}</desc><trkseg>\n${route.coordinates.map(([lng, lat]) => `    <trkpt lat="${lat}" lon="${lng}"/>`).join('\n')}\n  </trkseg></trk>\n</gpx>\n`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Brisa" xmlns="http://www.topografix.com/GPX/1/1">\n  <metadata><name>${xml(route.label)}</name><desc>${description}</desc><time>${time}</time></metadata>\n  <trk><name>${xml(route.label)}</name><desc>${description}</desc><trkseg>\n${route.coordinates.map(([lng, lat]) => `    <trkpt lat="${decimalText(lat)}" lon="${decimalText(lng)}"/>`).join('\n')}\n  </trkseg></trk>\n</gpx>\n`;
 }
