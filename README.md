@@ -2,6 +2,8 @@
 
 A BigRedHacks navigation project: compare walking routes using historical reported incidents and an explicit limit on added walking time. Inspired by our LATAM team's experiences, Brisa uses a shared routing engine with independently validated city data packages.
 
+![São Paulo walking route comparison: fastest, balanced and lower historical exposure choices](docs/screenshots/sao-paulo-desktop.jpg)
+
 **Included coverage:** four bounded packages. Coverage is regional; a city label does not imply every neighborhood is supported.
 
 | City | Coverage | Historical scope |

@@ -13,12 +13,14 @@ Open the printed local URL. NYC is the app default. For the LATAM demo, open `/?
 
 1. **0:00 — Frame the decision.** Our LATAM team's experiences inspired a walking planner that exposes historical report context alongside time. Begin in São Paulo with Edifício Copan → Praça da Sé, noon–6 pm, eight extra minutes allowed. This is the working Brazil package.
 2. **0:20 — Compare geometry.** Select Fastest walk and a distinct lower-exposure choice if available. The highlighted line is the scored OSM path. Enable reported incident intensity to show aggregate context. The current São Paulo default is about 20.30 minutes fastest versus 22.53 minutes for 14.89% lower modeled exposure (cards round values). Use the displayed values if a package or model changes.
-3. **0:40 — Enforce the budget.** Set Room for a detour to zero. Old results and their share/export actions disappear until Compare walking routes runs again. Restore eight minutes. A distinct alternative is not promised for every request.
+3. **0:40 — Enforce the budget.** Set Room for a detour to zero, then select Compare walking routes. Old results and their share/export actions disappear until the comparison runs again. Restore eight minutes and select Compare walking routes again before continuing. A distinct alternative is not promised for every request.
 4. **1:00 — Explain the chosen path.** Open Street sequence. These are contiguous named segments, not turn instructions. Same walk, different windows shows the selected geometry's four historical exposure values; choosing another route updates all four.
 5. **1:20 — Share and export.** Share trip reveals the coordinate disclosure and a link; Copy link is optional. Open that link to restore the endpoints, window, budget and semantic route preference. The browser address then retains only the coverage area. Download GPX preserves the selected path; Download summary preserves its street sequence and historical context. Shared links recalculate rather than freeze route geometry.
 6. **1:40 — Show scope and limits.** Show coverage fits the package boundary; Fit routes to map returns to the walk. Show the four-city selector without waiting for another comparison. Say: “São Paulo uses 2,466 eligible pedestrian cellphone theft/robbery reports with known times. Missing times introduce bias. These historical indices do not predict safety or rank cities.” Keep a city switch and SF’s narrow scope for questions.
 
 For a spoken script and submission draft, use [PITCH.md](PITCH.md).
+
+Actual app captures are available for the presentation: [desktop comparison](screenshots/sao-paulo-desktop.jpg) and [mobile map](screenshots/sao-paulo-mobile.jpg). They show the committed São Paulo demo, with OpenStreetMap attribution retained; they do not establish a public deployment or current street conditions.
 
 ## Included packages
 

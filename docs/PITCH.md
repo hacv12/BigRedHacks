@@ -6,7 +6,7 @@
 
 **0:20–0:50 — Show the decision.** Open `/?area=sao-paulo-centro`: Edifício Copan → Praça da Sé, noon–6 pm, eight extra minutes. Select Fastest walk, then Lower exposure if available. “These lines follow real OpenStreetMap streets. Each card shows the walking time and modeled report exposure. The extra-time budget is a constraint on every displayed choice.” Set the budget to zero and compare again.
 
-**0:50–1:15 — Make it explainable.** Restore the budget. Open Street sequence and show Same walk, different windows. “These four values score this exact path against four historical local-time windows. They do not silently substitute four different routes. Street names describe the path; they are not verified turn instructions.”
+**0:50–1:15 — Make it explainable.** Restore the budget and select Compare walking routes again. Open Street sequence and show Same walk, different windows. “These four values score this exact path against four historical local-time windows. They do not silently substitute four different routes. Street names describe the path; they are not verified turn instructions.”
 
 **1:15–1:35 — Make it portable.** Select Share trip. “Sharing is explicit: this link contains both locations. Opening it recalculates the request. GPX preserves the selected geometry, and the summary carries its historical context.” Show coverage and point out the four-city selector. Keep another city load for questions.
 
