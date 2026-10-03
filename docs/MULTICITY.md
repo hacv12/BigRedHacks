@@ -4,7 +4,7 @@ Requested October 3, 2026: support any city with usable data and include New Yor
 
 Brisa is a city-independent planner with a catalog of validated coverage packages. A package defines its real planning boundary, source, source-specific filters, local timezone, record period, default landmarks and graph. The UI discovers packages from the catalog. Adding a city using the normalized CSV contract requires no changes to React or the routing algorithm; a different public API schema requires an ingestion adapter.
 
-The release includes Chicago Loop and NYC Central Manhattan, with actual available coverage named on screen. NYC opens by default and covers a rectangle from Battery Park through Columbus Circle. A city name is not a promise of entire metropolitan coverage. Additional districts and cities use the same ingestion and registration process, documented in [ADDING_CITIES.md](ADDING_CITIES.md).
+The release includes NYC Central Manhattan, Chicago Loop, San Francisco Downtown and São Paulo Paulista–Centro, with actual available coverage named on screen. NYC opens by default and covers a rectangle from Battery Park through Columbus Circle. A city name is not a promise of entire metropolitan coverage. Additional districts and cities use the same ingestion and registration process, documented in [ADDING_CITIES.md](ADDING_CITIES.md).
 
 Completed implementation slices:
 
@@ -26,3 +26,13 @@ Source review rejected treating NYPD and Chicago offenses as equivalent. NYPD ha
 Lifecycle review covered switching cities during downloads and planning, failed packages, invalid catalogs, unknown deep links and recovery. City changes abort downloads, terminate the previous worker, remove the old map and reset endpoints, routes and settings. Package identity, metadata, full grid coverage and graph integrity are validated before display.
 
 Independent route checks reproduced the indexed NYC exposure calculations with the original linear cell lookup to within floating-point precision. Penn Station → Grand Central takes 22.731 minutes on the fastest path; the noon–6 pm lower-index candidate takes 23.300 minutes with 9.876% less modeled exposure. These are properties of the bundled historical model, not observed reductions in victimization. Refreshing sources can change the results.
+
+## Overnight review and additions
+
+An independent product review prioritized the street sequence, explicit share/export actions, coverage controls and mobile feedback. The four-window chart scores the same selected geometry throughout; it does not disguise route changes as a time effect. The engine reuses its existing edge integrals, preserving the original route objective and exact detour limits.
+
+Source reviews added SF with a deliberately narrow street/public-place robbery filter, then São Paulo with actual pedestrian cellphone theft/robbery records. The SSP workbook joins objects, people and offenses, so publisher report identity and highest-version consolidation happen before aggregation. Missing or imprecise occurrence times are excluded and disclosed. These packages remain independently normalized and cannot rank cities.
+
+The São Paulo geometry review caught MASP snapping onto a tunnel beneath Paulista. The selectable landmark now pins a reviewed surface sidewalk node and fails a future rebuild if that node disappears. This is a specific corrected access point, not a general accessibility audit. Copan → Sé supplies a useful default comparison in all four historical windows.
+
+Browser review verified selected-path GPX coordinates, shared-trip restoration, malformed-link recovery, stale-action removal, map-picker feedback and desktop/mobile layouts. Accessibility testing led to stronger contrast and a keyboard-focusable street list. Fonts are bundled locally. A production build was exercised under `/BigRedHacks/` with all four city workers and a shared-link reload. Publishing remains a separate manual action; [DEPLOY.md](DEPLOY.md) records the prepared workflow.

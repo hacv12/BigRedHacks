@@ -23,8 +23,10 @@ https://fonts.gstatic.com/s/manrope/v20/xn7gYHE41ni1AdIRggexSvfedN4.woff2
 
 dmsans-OFL.txt
 https://raw.githubusercontent.com/google/fonts/main/ofl/dmsans/OFL.txt
-4482 bytes; SHA256 9af36190332437f5ecd09974de43c1f7c77a310a996cdd8ceb25628b458840e1
+4389 bytes; SHA256 2af94f4fb533be8fa23282eb33e08ca311ddf47c2f32777e2040b282deeec65c
 
 manrope-OFL.txt
 https://raw.githubusercontent.com/google/fonts/main/ofl/manrope/OFL.txt
 4387 bytes; SHA256 58172e0c0fac2cda8a37b348164bb55e44b0e69051e557e92b1d3f6910141f7b
+
+License text line endings are normalized to LF for repository storage.

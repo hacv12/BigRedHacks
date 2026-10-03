@@ -208,7 +208,7 @@ export function exportRouteText(
 ): string {
   return [
     plain(`Brisa — ${route.label}`),
-    `${(route.meters / 1000).toFixed(2)} km · ${Math.round(route.minutes)} min estimated walking · +${route.extraMinutes.toFixed(1)} min`,
+    `${(route.meters / 1000).toFixed(2)} km · ${Math.ceil(route.minutes)} min estimated walking · +${route.extraMinutes.toFixed(1)} min`,
     plain(contextText(context)),
     '',
     'Street sequence (contiguous segments):',

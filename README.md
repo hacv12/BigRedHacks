@@ -2,7 +2,16 @@
 
 A BigRedHacks navigation project: compare walking routes using historical reported incidents and an explicit limit on added walking time. Inspired by our LATAM team's experiences, Brisa uses a shared routing engine with independently validated city data packages.
 
-**Included coverage:** New York City · Central Manhattan, and Chicago · Loop. The selector and map show each package's actual boundary. Coverage is regional; a city label does not imply every neighborhood or borough is supported.
+**Included coverage:** four bounded packages. Coverage is regional; a city label does not imply every neighborhood is supported.
+
+| City | Coverage | Historical scope |
+| --- | --- | --- |
+| New York City | Central Manhattan | Source-specific eligible 2025 reports |
+| Chicago | Loop | Source-specific eligible 2025 reports |
+| San Francisco | Downtown | Street/public-place robbery only; 160 eligible 2025 reports |
+| São Paulo, Brazil | Paulista–Centro | Pedestrian cellphone theft/robbery only; 2,466 eligible 2025 reports |
+
+The selector and Show coverage control expose each package's actual boundary. Source definitions differ; these indices cannot rank cities. São Paulo includes only eligible pedestrian cellphone theft/robbery with precise occurrence times: 19,217 halo reports with missing or imprecise times are excluded, which can bias historical-window comparisons. This is not general crime coverage. See [source methodology](docs/DATA.md).
 
 ## Run locally
 
@@ -13,7 +22,7 @@ npm ci
 npm run dev
 ```
 
-Open the URL printed by Vite. NYC is the default; `/?area=chicago-loop` opens Chicago directly. No Google Maps key, paid API, backend, or account is needed. The app loads only the selected area's package. Routing runs locally in a Web Worker; optional background map tiles require internet. Bundled streets and routes remain available when tiles fail.
+Open the URL printed by Vite. NYC is the default; `/?area=chicago-loop` opens Chicago directly; `/?area=sf-downtown` opens San Francisco; `/?area=sao-paulo-centro` opens the working Brazil demo. No Google Maps key, paid API, backend, or account is needed. The app loads only the selected area's package. Routing runs locally in a Web Worker; optional background map tiles require internet. Bundled streets and routes remain available when tiles fail.
 
 ```sh
 npm test                         # loaders, routing, worker, real-city integration
@@ -28,7 +37,7 @@ An installed Chrome can be used with `PLAYWRIGHT_CHANNEL=chrome npm run test:e2e
 
 ## Add another city
 
-City data lives outside the application code. Configure coverage, provenance, timezone, dates, filters and landmarks, then run the common builder. There are official-source adapters for Chicago and NYPD and a normalized CSV adapter for other jurisdictions.
+City data lives outside the application code. Configure coverage, provenance, timezone, dates, filters and landmarks, then run the common builder. There are official-source adapters for NYPD, Chicago, SFPD and São Paulo SSP, plus a normalized CSV adapter for other jurisdictions.
 
 ```sh
 python3 scripts/build_data.py --list
@@ -47,6 +56,10 @@ Available public data still needs a usable occurrence time, location, incident d
 - Computes routes along real OpenStreetMap walking geometry and integrates the report index along each displayed path.
 - Shows distinct fastest/lower-index candidates that satisfy the exact budget, with time and distance alongside exposure comparisons.
 - Displays aggregate report context, package-specific dates, timezone, eligibility, sources and route explanations.
+- Shows contiguous street segments and four historical-window scores for the exact selected path.
+- Shares a reproducible request only after an explicit action. Links disclose both endpoint coordinates and recalculate on open; they do not guarantee permanently identical routes. Ordinary control changes do not write coordinates into the address bar.
+- Exports the selected geometry as GPX or its street sequence as text, with historical model/source context. These are planning references, not verified navigation instructions.
+- Fits the map independently to package coverage or the selected comparison.
 - Cancels old planning work on city switches, rejects unsupported points, and recovers from failed loads without displaying another city's routes.
 - Opens a destination in Google Maps as a separate action. Google calculates its own route; the selected geometry and exposure estimate do not transfer.
 
@@ -54,11 +67,24 @@ The index is **modeled exposure to historical reports**, not a calibrated probab
 
 ## Architecture
 
+```mermaid
+flowchart LR
+  Sources[Official incident sources + OSM] --> Pipeline[Python normalization and aggregation]
+  Pipeline --> Packages[Validated catalog and city packages]
+  Packages --> UI[React coverage and trip controls]
+  UI --> Worker[Local Web Worker graph search]
+  Worker --> Results[Selected path and four-window context]
+  Results --> Exports[Opt-in share link / GPX / text]
+```
+
+
 | Part | Location | Responsibility |
 | --- | --- | --- |
 | Multi-city design | [docs/MULTICITY.md](docs/MULTICITY.md) | Coverage model, source boundaries and expansion decisions |
 | Original council | [docs/PLAN.md](docs/PLAN.md) | Product tradeoffs and initial model |
-| Demo walkthrough | [docs/DEMO.md](docs/DEMO.md) | Working examples and pitch |
+| Demo walkthrough | [docs/DEMO.md](docs/DEMO.md) | Two-minute demo and local fallback |
+| Pitch kit | [docs/PITCH.md](docs/PITCH.md) | Spoken pitch and factual submission draft |
+| Manual deployment | [docs/DEPLOY.md](docs/DEPLOY.md) | Publication instructions; not a claim of a live deployment |
 | Source methodology | [docs/DATA.md](docs/DATA.md) | Exact queries, filters, provenance and limitations |
 | City onboarding | [docs/ADDING_CITIES.md](docs/ADDING_CITIES.md) | Add a supported public API/CSV package |
 | City configuration | `configs/cities/` | Coverage, source adapters, metadata and landmarks |
@@ -75,7 +101,7 @@ A new city is a new data package, not a new application. Larger regional coverag
 
 The committed packages make demos independent of live crime/Overpass APIs. Refresh is an explicit build-time operation. Cache identities include source/query/configuration; failed downloads preserve the last valid cache. Raw case records stay in ignored local caches and are never served by the app.
 
-After changing data, run Python validation, `npm test`, and `npm run build`. Deploy the resulting `dist/` as one release so the catalog and its data packages stay consistent. Serve at the domain root. GitHub Actions checks packages, algorithms, workers, production build and browser flows.
+After changing data, run Python validation, `npm test`, and `npm run build`. Deploy the resulting `dist/` as one release so the catalog and its data packages stay consistent. Root hosting is the default; [GitHub Pages instructions](docs/DEPLOY.md) cover project paths through `BASE_PATH`. GitHub Actions checks packages, algorithms, workers, production build and browser flows, including automated accessibility checks.
 
 All `VITE_` values are public browser configuration. `.env.example` documents the optional tile URL; never put private credentials there. Follow the selected tile provider's attribution and usage rules. There is no bulk tile downloader or service worker.
 
@@ -83,7 +109,10 @@ All `VITE_` values are public browser configuration. `.env.example` documents th
 
 - [NYPD Complaint Data Historic](https://data.cityofnewyork.us/Public-Safety/NYPD-Complaint-Data-Historic/qgea-i56i/about_data), NYC Open Data.
 - [City of Chicago, Crimes 2001 to Present](https://data.cityofchicago.org/Public-Safety/Crimes-2001-to-Present/ijzp-q8t2/data).
+- [SFPD Incident Reports 2018 to Present](https://data.sf.gov/Public-Safety/Police-Department-Incident-Reports-2018-to-Present/wg3w-h783), DataSF; the included package uses a narrow street/public-place robbery filter.
+- [SSP-SP Celulares Subtraídos](https://www.ssp.sp.gov.br/estatistica/consultas), São Paulo state public-security source; derived pedestrian-report aggregates retain attribution. The workbook is an exploratory raw release, not official crime statistics.
 - Streets: © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), ODbL. Derived street data retain that license, separately from incident aggregates.
 - [OpenStreetMap tile policy](https://operations.osmfoundation.org/policies/tiles/).
+- DM Sans and Manrope are bundled locally under the SIL Open Font License; source URLs and licenses are in [public/fonts](public/fonts/PROVENANCE.txt).
 
 See the individual sources' terms and data notes. The team has not selected a license for application code; no blanket license is asserted over third-party data.
