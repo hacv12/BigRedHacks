@@ -357,19 +357,45 @@ async function readJson(
   url: string,
   message: string,
   signal?: AbortSignal,
+  timeoutMs = 15_000,
 ): Promise<unknown> {
-  const response = await fetch(url, { signal });
-  if (!response.ok) throw new Error(message);
-  let value: unknown;
-  try {
-    value = await response.json();
-  } catch (error) {
-    signal?.throwIfAborted();
-    if (error instanceof Error && error.name === 'AbortError') throw error;
-    throw new Error(message);
-  }
   signal?.throwIfAborted();
-  return value;
+  const controller = new AbortController();
+  let rejectCancellation!: (reason: unknown) => void;
+  const cancellation = new Promise<never>((_, reject) => {
+    rejectCancellation = reject;
+  });
+  const cancel = (reason: unknown) => {
+    rejectCancellation(reason);
+    controller.abort(reason);
+  };
+  const abort = () => cancel(signal!.reason);
+  signal?.addEventListener('abort', abort, { once: true });
+  const timer = setTimeout(
+    () => cancel(new Error(`${message} The download timed out. Please retry.`)),
+    timeoutMs,
+  );
+  const download = async (): Promise<unknown> => {
+    const response = await fetch(url, { signal: controller.signal });
+    controller.signal.throwIfAborted();
+    if (!response.ok) throw new Error(message);
+    try {
+      const value: unknown = await response.json();
+      controller.signal.throwIfAborted();
+      return value;
+    } catch (error) {
+      controller.signal.throwIfAborted();
+      if (error instanceof Error && error.name === 'AbortError') throw error;
+      throw new Error(message);
+    }
+  };
+  try {
+    // Also bounds implementations/streams that do not honor AbortSignal.
+    return await Promise.race([cancellation, download()]);
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', abort);
+  }
 }
 export async function loadCatalog(signal?: AbortSignal): Promise<CityCatalog> {
   return validateCatalog(
@@ -389,6 +415,7 @@ export async function loadDataset(
       `${import.meta.env.BASE_URL}${area.datasetUrl.slice(1)}`,
       `Unable to load the ${area.city} · ${area.region} snapshot. Try another area or retry.`,
       signal,
+      60_000,
     ),
     area,
   );

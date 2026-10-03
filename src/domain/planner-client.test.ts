@@ -23,30 +23,83 @@ const request: PlanRequest = {
 const result = { routes: [] } as unknown as RouteComparison;
 afterEach(() => vi.unstubAllGlobals());
 describe('worker planner client', () => {
-  it('initializes once and matches out-of-order responses to request IDs', async () => {
+  it('coalesces five inputs to first and last while settling every promise', async () => {
     vi.stubGlobal('Worker', FakeWorker);
     const planner = createRoutePlanner(data),
       worker = FakeWorker.latest;
-    const first = planner.plan(request),
-      second = planner.plan(request);
-    expect(
-      worker.postMessage.mock.calls.map(([message]) => message.type),
-    ).toEqual(['init', 'plan', 'plan']);
-    expect(worker.postMessage.mock.calls[0][0].data).toBe(data);
+    const promises = Array.from({ length: 5 }, (_, bucket) =>
+      planner.plan({ ...request, maxExtraMinutes: bucket }),
+    );
+    const settled = Promise.allSettled(promises);
+    expect(worker.postMessage.mock.calls.map(([m]) => m.type)).toEqual([
+      'init',
+      'plan',
+    ]);
+    worker.onmessage!({ data: { type: 'success', id: 1, result } });
+    expect(worker.postMessage.mock.calls.map(([m]) => m.id)).toEqual([
+      undefined,
+      1,
+      5,
+    ]);
+    worker.onmessage!({ data: { type: 'success', id: 5, result } });
+    const outcomes = await settled;
+    for (const outcome of outcomes.slice(0, 4))
+      expect(outcome).toMatchObject({
+        status: 'rejected',
+        reason: { name: 'AbortError' },
+      });
+    expect(outcomes[4]).toEqual({ status: 'fulfilled', value: result });
+    planner.dispose();
+  });
+  it.each(['dispose', 'onerror', 'onmessageerror', 'invalid'])(
+    'settles active and queued on %s',
+    async (action) => {
+      vi.stubGlobal('Worker', FakeWorker);
+      const planner = createRoutePlanner(data),
+        worker = FakeWorker.latest;
+      const settled = Promise.allSettled([
+        planner.plan(request),
+        planner.plan(request),
+      ]);
+      if (action === 'dispose') planner.dispose();
+      else if (action === 'invalid')
+        worker.onmessage!({ data: { type: 'success', id: 99, result } });
+      else worker[action as 'onerror' | 'onmessageerror']!();
+      expect((await settled).every((x) => x.status === 'rejected')).toBe(true);
+      await expect(planner.plan(request)).rejects.toBeDefined();
+      expect(worker.terminate).toHaveBeenCalled();
+    },
+  );
+  it('recovers from dispatch exceptions including the queued dispatch', async () => {
+    vi.stubGlobal('Worker', FakeWorker);
+    const planner = createRoutePlanner(data),
+      worker = FakeWorker.latest;
+    worker.postMessage.mockImplementationOnce(() => {
+      throw new Error('clone failed');
+    });
+    await expect(planner.plan(request)).rejects.toThrow('clone failed');
+    const outcomes = Promise.allSettled([
+      planner.plan(request),
+      planner.plan(request),
+    ]);
+    worker.postMessage.mockImplementationOnce(() => {
+      throw new Error('queued clone failed');
+    });
     worker.onmessage!({ data: { type: 'success', id: 2, result } });
+    expect(await outcomes).toMatchObject([
+      { status: 'rejected', reason: { name: 'AbortError' } },
+      { status: 'rejected', reason: { message: 'queued clone failed' } },
+    ]);
+    const next = planner.plan(request);
     worker.onmessage!({
       data: {
         type: 'error',
-        id: 1,
-        code: 'OUTSIDE_COVERAGE',
-        message: 'Outside',
+        id: 4,
+        code: 'DISCONNECTED',
+        message: 'Disconnected',
       },
     });
-    await expect(second).resolves.toEqual(result);
-    await expect(first).rejects.toMatchObject({ code: 'OUTSIDE_COVERAGE' });
-    const third = planner.plan(request);
-    worker.onmessage!({ data: { type: 'success', id: 3, result } });
-    await expect(third).resolves.toEqual(result);
+    await expect(next).rejects.toMatchObject({ code: 'DISCONNECTED' });
     planner.dispose();
   });
   it('terminates and rejects pending and future requests on disposal', async () => {

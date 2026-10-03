@@ -30,7 +30,7 @@ After publication is authorized and local/CI checks pass:
 
 1. Commit and push the reviewed source, aggregate packages and workflow together.
 2. Open **Actions → Publish Brisa to GitHub Pages → Run workflow** and select the approved branch.
-3. The build job installs locked dependencies, runs TypeScript/unit and offline data tests, derives the base path from the configured Pages site, builds the complete `dist/` directory, and uploads it as one Pages artifact.
+3. The build job installs locked dependencies, runs TypeScript/unit and offline data tests, derives the base path from the configured Pages site, builds the complete `dist/` directory, then runs the desktop/mobile browser suite before uploading it as one Pages artifact.
 4. The deployment job publishes that artifact. Open the actual URL reported by its `github-pages` environment, and repeat the city-switch, route, worker and shared-link checks on HTTPS. Enable latest activity and verify official-feed CORS and visible source freshness on the deployed origin.
 
 The workflow uses current official actions: [checkout](https://github.com/actions/checkout), [setup-node](https://github.com/actions/setup-node), [configure-pages](https://github.com/actions/configure-pages/releases/tag/v6.0.0), [upload-pages-artifact](https://github.com/actions/upload-pages-artifact/releases/tag/v5.0.0), and [deploy-pages](https://github.com/actions/deploy-pages/releases/tag/v5.0.1). It has no automatic deployment trigger. A failed build never reaches the deploy job; concurrent deployments are serialized.

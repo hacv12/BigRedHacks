@@ -20,28 +20,65 @@ export function createRoutePlanner(data: CityDataset): {
   const worker = new Worker(new URL('./planner-worker.ts', import.meta.url), {
     type: 'module',
   });
-  const pending = new Map<
-    number,
-    {
-      resolve: (result: RouteComparison) => void;
-      reject: (error: Error) => void;
-    }
-  >();
-  let nextId = 0,
-    stopped: Error | null = null;
+  type Pending = {
+    id: number;
+    request: PlanRequest;
+    resolve: (result: RouteComparison) => void;
+    reject: (error: unknown) => void;
+  };
+  let active: Pending | undefined;
+  let queued: Pending | undefined;
+  let nextId = 0;
+  let stopped: Error | null = null;
+  const cancelled = () =>
+    new DOMException('Route planning was superseded.', 'AbortError');
   const stop = (error: Error) => {
     stopped = error;
     worker.terminate();
-    for (const entry of pending.values()) entry.reject(error);
-    pending.clear();
+    active?.reject(error);
+    queued?.reject(error);
+    active = queued = undefined;
+  };
+  const dispatch = (entry: Pending) => {
+    active = entry;
+    try {
+      worker.postMessage({
+        type: 'plan',
+        id: entry.id,
+        request: entry.request,
+      } satisfies PlannerMessage);
+    } catch (error) {
+      active = undefined;
+      entry.reject(error);
+    }
   };
   worker.onmessage = (event: MessageEvent<PlannerResponse>) => {
-    const response = event.data,
-      entry = pending.get(response.id);
-    if (!entry) return;
-    pending.delete(response.id);
+    const response = event.data;
+    if (
+      !response ||
+      !active ||
+      response.id !== active.id ||
+      (response.type !== 'success' && response.type !== 'error') ||
+      (response.type === 'success' && !response.result) ||
+      (response.type === 'error' &&
+        (typeof response.code !== 'string' ||
+          typeof response.message !== 'string'))
+    ) {
+      stop(
+        new RoutingError(
+          'WORKER_FAILED',
+          'The route planner returned an invalid response. Reload the coverage area.',
+        ),
+      );
+      return;
+    }
+    const entry = active;
+    active = undefined;
     if (response.type === 'success') entry.resolve(response.result);
     else entry.reject(new RoutingError(response.code, response.message));
+    const next = queued;
+    queued = undefined;
+    if (next) dispatch(next);
   };
   worker.onerror = () =>
     stop(
@@ -68,17 +105,12 @@ export function createRoutePlanner(data: CityDataset): {
       if (stopped) return Promise.reject(stopped);
       const id = ++nextId;
       return new Promise((resolve, reject) => {
-        pending.set(id, { resolve, reject });
-        try {
-          worker.postMessage({
-            type: 'plan',
-            id,
-            request,
-          } satisfies PlannerMessage);
-        } catch (error) {
-          pending.delete(id);
-          reject(error);
-        }
+        const entry = { id, request, resolve, reject };
+        if (active) {
+          active.reject(cancelled());
+          queued?.reject(cancelled());
+          queued = entry;
+        } else dispatch(entry);
       });
     },
     dispose() {

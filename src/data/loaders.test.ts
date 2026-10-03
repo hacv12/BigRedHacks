@@ -207,10 +207,10 @@ describe('coverage catalog and package validation', () => {
         dataset(),
       );
       expect(fetcher).toHaveBeenNthCalledWith(1, `${base}data/catalog.json`, {
-        signal: controller.signal,
+        signal: expect.any(AbortSignal),
       });
       expect(fetcher).toHaveBeenNthCalledWith(2, `${base}data/test-city.json`, {
-        signal: controller.signal,
+        signal: expect.any(AbortSignal),
       });
     },
   );
@@ -256,5 +256,60 @@ describe('coverage catalog and package validation', () => {
     await expect(loadDataset(area)).rejects.toMatchObject({
       name: 'AbortError',
     });
+  });
+  it.each(['headers', 'body'])(
+    'bounds stalled %s even when transport ignores abort',
+    async (stage) => {
+      vi.useFakeTimers();
+      try {
+        const stalled = new Promise<never>(() => {});
+        const fetcher = vi
+          .fn()
+          .mockReturnValue(
+            stage === 'headers'
+              ? stalled
+              : Promise.resolve({ ok: true, json: () => stalled }),
+          );
+        vi.stubGlobal('fetch', fetcher);
+        const catalogResult =
+          expect(loadCatalog()).rejects.toThrow('timed out');
+        await vi.advanceTimersByTimeAsync(15_000);
+        await catalogResult;
+        expect(fetcher.mock.calls[0][1].signal.aborted).toBe(true);
+        const snapshotResult = expect(loadDataset(area)).rejects.toThrow(
+          'timed out',
+        );
+        await vi.advanceTimersByTimeAsync(59_999);
+        expect(fetcher.mock.calls[1][1].signal.aborted).toBe(false);
+        await vi.advanceTimersByTimeAsync(1);
+        await snapshotResult;
+        expect(vi.getTimerCount()).toBe(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+  it('preserves caller cancellation reason and removes deadline/listener', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() => new Promise(() => {})),
+      );
+      const controller = new AbortController();
+      const remove = vi.spyOn(controller.signal, 'removeEventListener');
+      const reason = new Error('User changed city');
+      const result = expect(loadDataset(area, controller.signal)).rejects.toBe(
+        reason,
+      );
+      controller.abort(reason);
+      await result;
+      expect(vi.getTimerCount()).toBe(0);
+      expect(remove).toHaveBeenCalledWith('abort', expect.any(Function));
+      await expect(loadCatalog(controller.signal)).rejects.toBe(reason);
+      expect(fetch).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
