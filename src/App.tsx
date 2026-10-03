@@ -16,25 +16,40 @@ import {
   Navigation,
   X,
 } from 'lucide-react';
-import { planRoutes } from './domain/routing';
+import { createRoutePlanner } from './domain/planner-client';
+import { loadCatalog, loadDataset } from './data/loaders';
 import type {
   BucketIndex,
   CityDataset,
+  CityCatalog,
   LngLat,
   RouteComparison,
 } from './domain/types';
 
-const windows = [
-  'Midnight – 6 am',
-  '6 am – noon',
-  'Noon – 6 pm',
-  '6 pm – midnight',
-];
 const latlng = (p: LngLat): L.LatLngTuple => [p[1], p[0]];
 const distance = (m: number) => `${(m / 1000).toFixed(1)} km`;
 
 export default function App() {
   const [data, setData] = useState<CityDataset | null>(null);
+  const [catalog, setCatalog] = useState<CityCatalog | null>(null);
+  const [catalogError, setCatalogError] = useState('');
+  const [catalogReload, setCatalogReload] = useState(0);
+  const [areaId, setAreaId] = useState('');
+  const [notice, setNotice] = useState('');
+  const [busy, setBusy] = useState(false);
+  const generation = useRef(0);
+  const planGeneration = useRef(0);
+  const planner = useRef<ReturnType<typeof createRoutePlanner> | null>(null);
+  const area = catalog?.areas.find((item) => item.id === areaId);
+  const windows = data?.manifest.timeBuckets ?? [];
+  const period = data
+    ? [
+        ...new Set([
+          data.manifest.periodStart.slice(0, 4),
+          data.manifest.periodEnd.slice(0, 4),
+        ]),
+      ].join('–')
+    : '';
   const [loadError, setLoadError] = useState('');
   const [reload, setReload] = useState(0);
   const [origin, setOrigin] = useState('');
@@ -81,70 +96,174 @@ export default function App() {
     destination: LngLat;
   } | null>(null);
 
-  function compute(
-    dataset: CityDataset,
+  function invalidatePlan() {
+    planGeneration.current += 1;
+    setBusy(false);
+    setDirty(true);
+    setError('');
+  }
+
+  async function compute(
+    _dataset: CityDataset,
     start: LngLat,
     end: LngLat,
     time = bucket,
     extra = budget,
   ) {
+    const currentPlanner = planner.current;
+    if (!currentPlanner) return;
+    const request = ++planGeneration.current;
+    const cityGeneration = generation.current;
+    setBusy(true);
+    setDirty(false);
+    setResult(null);
+    setSelected('');
+    setError('');
     try {
-      const comparison = planRoutes(dataset, {
+      const comparison = await currentPlanner.plan({
         origin: start,
         destination: end,
         bucket: time,
         maxExtraMinutes: extra,
       });
+      if (
+        request !== planGeneration.current ||
+        cityGeneration !== generation.current
+      )
+        return;
       setResult(comparison);
       setSelected(comparison.routes.at(-1)?.id ?? '');
-      setError('');
       setDirty(false);
       setPlannedPoints({ origin: start, destination: end });
       setFit((v) => v + 1);
     } catch (e) {
+      if (
+        request !== planGeneration.current ||
+        cityGeneration !== generation.current
+      )
+        return;
       setResult(null);
       setSelected('');
       setError(
         e instanceof Error
           ? e.message
-          : 'Could not calculate this walk. Try another endpoint.',
+          : 'Could not calculate this walk. Try again or choose another endpoint.',
       );
+    } finally {
+      if (
+        request === planGeneration.current &&
+        cityGeneration === generation.current
+      )
+        setBusy(false);
     }
   }
 
   useEffect(() => {
     const controller = new AbortController();
-    setLoadError('');
-    fetch('/data/chicago-loop.json', { signal: controller.signal })
-      .then((r) => {
-        if (!r.ok) throw new Error('Unable to load the city snapshot.');
-        return r.json();
-      })
-      .then((d: CityDataset) => {
-        setData(d);
-        const a = d.landmarks.find((l) => l.id === 'willis') ?? d.landmarks[0];
-        const b =
-          d.landmarks.find((l) => l.id === 'river') ??
-          d.landmarks[Math.min(4, d.landmarks.length - 1)];
-        if (a && b) {
-          setOrigin(a.id);
-          setDestination(b.id);
-          compute(d, a.point, b.point, 2, 8);
-        }
+    let active = true;
+    setCatalogError('');
+    loadCatalog(controller.signal)
+      .then((next) => {
+        if (!active) return;
+        const requested = new URL(window.location.href).searchParams.get(
+          'area',
+        );
+        const chosen =
+          next.areas.find((item) => item.id === requested)?.id ??
+          next.defaultAreaId;
+        if (requested && requested !== chosen)
+          setNotice(
+            'That coverage area is unavailable. Showing the default supported area.',
+          );
+        setCatalog(next);
+        setAreaId(chosen);
       })
       .catch((e) => {
-        if (e.name !== 'AbortError') setLoadError(e.message);
+        if (active && !controller.signal.aborted)
+          setCatalogError(
+            e instanceof Error ? e.message : 'Could not load supported cities.',
+          );
       });
-    return () => controller.abort();
-  }, [reload]);
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [catalogReload]);
+
+  function resetCity() {
+    generation.current += 1;
+    planGeneration.current += 1;
+    planner.current?.dispose();
+    planner.current = null;
+    setData(null);
+    setResult(null);
+    setOrigin('');
+    setDestination('');
+    setCustom({});
+    setError('');
+    setLoadError('');
+    setPlannedPoints(null);
+    setPicking(null);
+    setDetails(false);
+    setTileError(false);
+    setSelected('');
+    setDirty(false);
+    setBusy(false);
+    setOverlay(false);
+    setBucket(2);
+    setBudget(8);
+  }
+
+  useEffect(() => {
+    if (!area) return;
+    resetCity();
+    const current = generation.current;
+    const controller = new AbortController();
+    const url = new URL(window.location.href);
+    url.searchParams.set('area', area.id);
+    window.history.replaceState(null, '', url);
+    loadDataset(area, controller.signal)
+      .then((dataset) => {
+        if (controller.signal.aborted || current !== generation.current) return;
+        const nextPlanner = createRoutePlanner(dataset);
+        planner.current = nextPlanner;
+        setData(dataset);
+        const start = dataset.landmarks.find(
+          (item) => item.id === area.defaultOriginId,
+        )!;
+        const end = dataset.landmarks.find(
+          (item) => item.id === area.defaultDestinationId,
+        )!;
+        setOrigin(start.id);
+        setDestination(end.id);
+        void compute(dataset, start.point, end.point, 2, 8);
+      })
+      .catch((e) => {
+        if (controller.signal.aborted || current !== generation.current) return;
+        setData(null);
+        setLoadError(
+          e instanceof Error
+            ? e.message
+            : 'Could not load this coverage area. Try again.',
+        );
+      });
+    return () => {
+      controller.abort();
+      generation.current += 1;
+      planGeneration.current += 1;
+      planner.current?.dispose();
+      planner.current = null;
+    };
+  }, [area, reload]);
 
   useEffect(() => {
     if (!data || !mapEl.current || map.current) return;
     const b = data.manifest.planningBounds;
+    const mapGeneration = generation.current;
     const m = L.map(mapEl.current, {
       zoomControl: false,
       preferCanvas: true,
-      minZoom: 13,
+      minZoom: 10,
       maxZoom: 19,
     });
     map.current = m;
@@ -161,7 +280,9 @@ export default function App() {
           '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       },
     )
-      .on('tileerror', () => setTileError(true))
+      .on('tileerror', () => {
+        if (mapGeneration === generation.current) setTileError(true);
+      })
       .addTo(m);
     L.control.zoom({ position: 'bottomright' }).addTo(m);
     const streets = L.layerGroup().addTo(m);
@@ -170,6 +291,7 @@ export default function App() {
       { color: '#8caaa9', weight: 1.1, opacity: 0.42, interactive: false },
     ).addTo(streets);
     m.on('click', (e) => {
+      if (mapGeneration !== generation.current) return;
       const target = pickRef.current;
       if (!target) return;
       const point: LngLat = [e.latlng.lng, e.latlng.lat];
@@ -179,13 +301,15 @@ export default function App() {
         point[1] < b[1] ||
         point[1] > b[3]
       ) {
-        setError('Choose a point inside the Chicago Loop coverage area.');
+        setError(
+          `Choose a point inside ${data.manifest.district}, ${data.manifest.city} coverage.`,
+        );
         return;
       }
       setCustom((v) => ({ ...v, [target]: point }));
       (target === 'origin' ? setOrigin : setDestination)('custom');
       setPicking(null);
-      setDirty(true);
+      invalidatePlan();
       setError('');
     });
     let previousWidth = 0,
@@ -349,9 +473,13 @@ export default function App() {
         <div className="header-right">
           <span className="city-badge">
             <span />
-            Chicago Loop
+            {area ? `${area.city} · ${area.region}` : 'Choose your coverage'}
           </span>
-          <button className="text-button" onClick={() => setDetails(true)}>
+          <button
+            className="text-button"
+            disabled={!data}
+            onClick={() => setDetails(true)}
+          >
             <Info size={17} /> Behind the routes
           </button>
         </div>
@@ -362,22 +490,66 @@ export default function App() {
             <span className="eyebrow">TAKE A DIFFERENT PERSPECTIVE</span>
             <h1>
               Your walk.
-              <br />{' '}
-              Your tradeoff.
+              <br /> Your tradeoff.
             </h1>
             <p>
               Compare walking routes with context from historical reported
               incidents.
             </p>
           </div>
-          {loadError ? (
+          {catalog && (
+            <div className="coverage-picker">
+              <label className="field-label" htmlFor="coverage-area">
+                City and coverage
+              </label>
+              <div className="select-wrap time-select">
+                <select
+                  id="coverage-area"
+                  value={areaId}
+                  onChange={(event) => {
+                    resetCity();
+                    setNotice('');
+                    setAreaId(event.target.value);
+                  }}
+                >
+                  {catalog.areas.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.city} · {item.region}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={16} />
+              </div>
+              <p className="coverage-description">{area?.description}</p>
+              {data && (
+                <p className="coverage-source">
+                  Source: {data.manifest.sourceName}
+                </p>
+              )}
+              {notice && (
+                <p role="status" className="source-note">
+                  {notice}
+                </p>
+              )}
+            </div>
+          )}
+          {catalogError ? (
+            <div className="error" role="alert">
+              {catalogError}
+              <button onClick={() => setCatalogReload((value) => value + 1)}>
+                Retry city list
+              </button>
+            </div>
+          ) : loadError ? (
             <div className="error" role="alert">
               {loadError}
               <button onClick={() => setReload((v) => v + 1)}>Try again</button>
             </div>
           ) : !data ? (
             <div className="loading" role="status">
-              Loading Chicago streets…
+              {area
+                ? `Loading ${area.city} · ${area.region} streets…`
+                : 'Loading supported cities…'}
             </div>
           ) : (
             <>
@@ -405,7 +577,7 @@ export default function App() {
                               (key === 'origin' ? setOrigin : setDestination)(
                                 e.target.value,
                               );
-                              setDirty(true);
+                              invalidatePlan();
                             }}
                           >
                             {custom[key] && (
@@ -444,14 +616,14 @@ export default function App() {
                         origin: custom.destination,
                         destination: custom.origin,
                       });
-                      setDirty(true);
+                      invalidatePlan();
                     }}
                   >
                     <ArrowDownUp size={14} />
                   </button>
                 </div>
                 <label className="field-label" htmlFor="time-window">
-                  Historical time window <span>Chicago time</span>
+                  Historical time window <span>{data.manifest.timezone}</span>
                 </label>
                 <div className="select-wrap time-select">
                   <select
@@ -459,7 +631,7 @@ export default function App() {
                     value={bucket}
                     onChange={(e) => {
                       setBucket(Number(e.target.value) as BucketIndex);
-                      setDirty(true);
+                      invalidatePlan();
                     }}
                   >
                     {windows.map((w, i) => (
@@ -487,20 +659,35 @@ export default function App() {
                   }
                   onChange={(e) => {
                     setBudget(Number(e.target.value));
-                    setDirty(true);
+                    invalidatePlan();
                   }}
                 />
                 <div className="range-labels">
                   <span>Direct as possible</span>
                   <span>Up to 15 min extra</span>
                 </div>
-                <button className="compare-button" type="submit">
-                  Compare walking routes <ArrowRight size={18} />
+                <button
+                  className="compare-button"
+                  type="submit"
+                  disabled={busy}
+                >
+                  {busy
+                    ? 'Comparing walking routes…'
+                    : 'Compare walking routes'}{' '}
+                  <ArrowRight size={18} />
                 </button>
               </form>
               {error && (
                 <div className="error" role="alert">
                   {error}
+                  <button
+                    onClick={() => {
+                      resetCity();
+                      setReload((value) => value + 1);
+                    }}
+                  >
+                    Reload coverage area
+                  </button>
                 </div>
               )}
               <section
@@ -511,9 +698,11 @@ export default function App() {
                 <div className="results-title">
                   <h2>Your options</h2>
                   <span>
-                    {dirty
-                      ? 'Update to compare'
-                      : `${result?.routes.length ?? 0} routes compared`}
+                    {busy
+                      ? 'Calculating routes…'
+                      : dirty
+                        ? 'Update to compare'
+                        : `${result?.routes.length ?? 0} routes compared`}
                   </span>
                 </div>
                 {!dirty &&
@@ -578,7 +767,8 @@ export default function App() {
                   <Info size={14} />
                   <span>
                     Exposure is a historical report index, not a prediction of
-                    personal risk.
+                    personal risk. Indices compare routes within the selected
+                    snapshot, not across cities.
                   </span>
                 </p>
               </section>
@@ -586,8 +776,8 @@ export default function App() {
           )}
           <div className="planner-footer">
             <span className="snapshot-dot" />
-            2025 historical snapshot
-            <button onClick={() => setDetails(true)}>
+            {data ? `${period} snapshot` : 'Historical report snapshots'}
+            <button disabled={!data} onClick={() => setDetails(true)}>
               Data & method <ArrowUpRight size={13} />
             </button>
           </div>
@@ -600,27 +790,35 @@ export default function App() {
           <div className="map-location">
             <Compass size={20} />
             <div>
-              <strong>The Loop, Chicago</strong>
-              <span>{windows[bucket]} · 2025 reports</span>
+              <strong>
+                {area ? `${area.region}, ${area.city}` : 'Supported coverage'}
+              </strong>
+              <span>
+                {data
+                  ? `${windows[bucket]} · ${period} reports`
+                  : 'Choose a supported area to plan a walk'}
+              </span>
             </div>
-            <span className="map-location-tag">IL</span>
+            <span className="map-location-tag">{area?.regionCode}</span>
           </div>
-          <div className="map-tools">
-            <button
-              className={overlay ? 'active' : ''}
-              onClick={() => setOverlay((v) => !v)}
-              aria-pressed={overlay}
-              aria-label="Toggle reported incident intensity"
-            >
-              <Layers size={19} />
-            </button>
-            <button
-              onClick={() => setFit((v) => v + 1)}
-              aria-label="Fit routes to map"
-            >
-              <LocateFixed size={19} />
-            </button>
-          </div>
+          {data && (
+            <div className="map-tools">
+              <button
+                className={overlay ? 'active' : ''}
+                onClick={() => setOverlay((v) => !v)}
+                aria-pressed={overlay}
+                aria-label="Toggle reported incident intensity"
+              >
+                <Layers size={19} />
+              </button>
+              <button
+                onClick={() => setFit((v) => v + 1)}
+                aria-label="Fit routes to map"
+              >
+                <LocateFixed size={19} />
+              </button>
+            </div>
+          )}
           {picking && (
             <div className="pick-banner" role="status">
               Click the map to choose your {picking}.
@@ -632,36 +830,38 @@ export default function App() {
               </button>
             </div>
           )}
-          <div className="map-bottom">
-            <div className="map-legend">
-              <div className="legend-title">
-                <span className="legend-route" />
-                Selected walk
-                <span className="legend-route dashed" />
-                Alternative
+          {data && (
+            <div className="map-bottom">
+              <div className="map-legend">
+                <div className="legend-title">
+                  <span className="legend-route" />
+                  Selected walk
+                  <span className="legend-route dashed" />
+                  Alternative
+                </div>
+                <button
+                  className="intensity-toggle"
+                  onClick={() => setOverlay((v) => !v)}
+                  aria-pressed={overlay}
+                >
+                  <span>Reported incident intensity</span>
+                  <span className={`toggle ${overlay ? 'on' : ''}`} />
+                </button>
+                {overlay && (
+                  <>
+                    <div className="intensity-scale">
+                      <span>Lower</span>
+                      <i />
+                      <span>Higher</span>
+                    </div>
+                    <p className="legend-caveat">
+                      No reports does not mean no risk.
+                    </p>
+                  </>
+                )}
               </div>
-              <button
-                className="intensity-toggle"
-                onClick={() => setOverlay((v) => !v)}
-                aria-pressed={overlay}
-              >
-                <span>Reported incident intensity</span>
-                <span className={`toggle ${overlay ? 'on' : ''}`} />
-              </button>
-              {overlay && (
-                <>
-                  <div className="intensity-scale">
-                    <span>Lower</span>
-                    <i />
-                    <span>Higher</span>
-                  </div>
-                  <p className="legend-caveat">
-                    No reports does not mean no risk.
-                  </p>
-                </>
-              )}
             </div>
-          </div>
+          )}
           {tileError && (
             <div className="tile-status" role="status">
               Base tiles unavailable · bundled streets shown
@@ -718,7 +918,7 @@ export default function App() {
                 target="_blank"
                 rel="noreferrer"
               >
-                Chicago reported incidents ↗
+                {data.manifest.sourceName} ↗
               </a>
               <br />
               {data.manifest.periodStart} through {data.manifest.periodEnd}; all
@@ -744,7 +944,9 @@ export default function App() {
               Reports are aggregated into {data.manifest.cellSizeMeters} m
               cells. Six-hour counts are shrunk toward the all-day average,
               spatially smoothed, and normalized with a fixed dataset-wide
-              scale. Eligible offense categories have equal weight.
+              scale. Eligible offense categories:{' '}
+              {Object.keys(data.manifest.categoryWeights).join(', ')}. Category
+              weights are defined by this snapshot.
             </p>
             <p>
               Each street’s exposure adds walking minutes × local intensity,
@@ -827,8 +1029,8 @@ export default function App() {
               </>
             )}
             <p className="source-note">
-              Model version: {data.manifest.modelVersion}. This bounded demo
-              covers the Chicago Loop only.
+              Model version: {data.manifest.modelVersion}.{' '}
+              {data.manifest.coverageDescription}
             </p>
           </>
         )}

@@ -1189,3 +1189,37 @@ input[type='range']::-moz-range-thumb {
     margin-top: 8px;
   }
 }
+
+.coverage-picker {
+  margin: 24px 0;
+}
+.coverage-picker .field-label {
+  margin-top: 0;
+}
+.coverage-picker select {
+  min-height: 48px;
+  font-size: 15px;
+  padding-right: 34px;
+  color: #102c37;
+}
+.coverage-description {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #52686d;
+}
+.map-location {
+  max-width: calc(100% - 90px);
+}
+.map-location > div {
+  min-width: 0;
+}
+.map-location span {
+  overflow-wrap: anywhere;
+}
+.coverage-source {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #52686d;
+}
